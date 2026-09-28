@@ -34,6 +34,7 @@ Object.assign(messages.zh, {
   filenamePlaceholder: '例如 A14', filter: '筛选', allAlbums: '全部分类', rootAlbum: '其他照片',
   activityAlbum: '活动', teamAlbum: '工作组', sponsorAlbum: '赞助', galleryCount: '{count} 张照片',
   galleryLoading: '正在加载相册…', galleryUnavailable: '相册暂时无法加载。请重试或打开 Drive 相册。',
+  refreshGallery: '刷新照片 ↻', liveGallery: '自动检查新照片（每 30 秒）', galleryUpdated: '照片已更新', galleryChecking: '正在检查新照片…', livePaused: '自动更新已暂停，请点击刷新重试。',
   galleryEmpty: '没有找到符合筛选的照片', galleryEmptyDescription: '换一个分类或清除文件名筛选试试。', clearFilters: '清除筛选',
   galleryErrorTitle: '相册暂时无法加载', galleryErrorDescription: '可以重试；如果网站服务暂时不可用，也可以直接打开原始 Drive 相册。',
   retry: '重新加载', driveAlbum: '打开 Drive 相册 ↗', openPhoto: '放大查看 {name}', enlarge: '放大查看',
@@ -53,6 +54,7 @@ Object.assign(messages.it, {
   filenamePlaceholder: 'Ad esempio A14', filter: 'Filtra', allAlbums: 'Tutte le categorie', rootAlbum: 'Altre foto',
   activityAlbum: 'Attività', teamAlbum: 'Team', sponsorAlbum: 'Sponsor', galleryCount: '{count} foto',
   galleryLoading: 'Caricamento della galleria…', galleryUnavailable: 'Galleria non disponibile. Riprova oppure apri l’album su Drive.',
+  refreshGallery: 'Aggiorna le foto ↻', liveGallery: 'Controlla nuove foto ogni 30 secondi', galleryUpdated: 'Foto aggiornate', galleryChecking: 'Controllo delle nuove foto…', livePaused: 'Aggiornamento automatico in pausa. Premi Aggiorna per riprovare.',
   galleryEmpty: 'Nessuna foto corrisponde ai filtri', galleryEmptyDescription: 'Prova un’altra categoria o cancella il filtro per nome.', clearFilters: 'Cancella i filtri',
   galleryErrorTitle: 'La galleria non è disponibile', galleryErrorDescription: 'Puoi riprovare. Se il sito non è disponibile, puoi anche aprire l’album originale su Drive.',
   retry: 'Riprova', driveAlbum: 'Apri l’album su Drive ↗', openPhoto: 'Ingrandisci {name}', enlarge: 'Ingrandisci',
@@ -75,6 +77,7 @@ export function initLanguage() {
     '.header-note': 'tagline', '.hero h1': 'defaultEvent', '.intro': 'eventIntro', '#event-pill': 'defaultEvent', '#event-title': 'defaultEvent', '#event-count': 'eventCount', '.art-caption': 'artCaption', '.local-pill': 'local', '.search-card h2': 'start', '.card-description': 'instruction', '#file-label': 'choose', '#file-hint': 'format', '.choose-tag': 'album', '#privacy-button': 'detail', '#search-button span:first-child': 'search', '.how-card h2': 'guide', '.how-card li:nth-child(1) strong': 'guide1', '.how-card li:nth-child(1) p': 'guide1p', '.how-card li:nth-child(2) strong': 'guide2', '.how-card li:nth-child(2) p': 'guide2p', '.how-card li:nth-child(3) strong': 'guide3', '.how-card li:nth-child(3) p': 'guide3p', '.side-note p': 'note', '#setup-banner strong': 'setup', '#setup-banner p': 'setupp', '#demo-button': 'demo', '#results-title': 'moments', '#reset-button': 'reset', '#empty-result h3': 'empty', '#empty-result p': 'emptyp', '#more-button': 'more', '#footer-contact': 'contact', '#footer-credit': 'credit', '#footer-privacy': 'privacy', '#privacy-dialog h2': 'privacyTitle', '#privacy-dialog p:nth-of-type(2)': 'privacy1', '#privacy-dialog p:nth-of-type(3)': 'privacy2', '#privacy-dialog p:nth-of-type(4)': 'privacy3', '#privacy-dialog p:nth-of-type(5)': 'privacy4',
     '#tab-search-label': 'tabSearch', '#tab-browse-label': 'tabBrowse', '#new-feature': 'newFeature', '#fallback-browse': 'fallbackBrowse', '#empty-browse': 'emptyBrowse', '#result-fallback-label': 'resultFallback', '#result-browse': 'openGallery', '#browse-eyebrow': 'browseEyebrow', '#browse-title': 'browseTitle', '#browse-description': 'browseDescription', '#browse-to-search': 'trySearch', '#browse-demo-notice': 'galleryDemo', '#album-label': 'albumFilter', '#filename-label': 'filenameFilter', '#filter-submit': 'filter', '#browse-empty-title': 'galleryEmpty', '#browse-empty-description': 'galleryEmptyDescription', '#clear-filters': 'clearFilters', '#browse-more': 'more', '#browse-error-title': 'galleryErrorTitle', '#browse-error-description': 'galleryErrorDescription', '#browse-retry': 'retry', '#drive-folder-link': 'driveAlbum', '#viewer-note': 'viewerNote', '#viewer-original': 'viewerOriginal'
   };
+  texts['#browse-refresh'] = 'refreshGallery'; texts['#browse-live-label'] = 'liveGallery';
   for (const [selector, key] of Object.entries(texts)) { const el = document.querySelector(selector); if (el) el.innerHTML = t(key); }
   const consent = document.querySelector('.consent span');
   if (consent) consent.firstChild.textContent = t('consent') + ' ';

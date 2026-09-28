@@ -4,11 +4,17 @@ const $ = id => document.getElementById(id);
 export function createGallery(api, isPreview) {
   let photos = [], offset = 0, total = 0, initialized = false, sequence = 0, busy = false;
   let currentAlbum = null, currentQuery = '', folder = null, metadataReady = false, metadataFailed = false;
+  let eventPhotoCount = -1, refreshing = false;
   const demoPhotos = Array.from({ length: 30 }, (_, i) => ({ id: `demo-${i}`, name: `${i % 3 === 0 ? 'A' : 'P'}${String(i + 1).padStart(2, '0')}.jpg`, album_path: ['活动', '工作组', '赞助'][i % 3], thumbnail: `art/moment-${i % 2 + 1}.svg`, demo: true }));
   function setAlbums(albums) {
     $('album-filter').replaceChildren();
     const all = document.createElement('option'); all.value = ''; all.textContent = t('allAlbums'); $('album-filter').append(all);
     for (const album of albums) { const option = document.createElement('option'); option.value = album.path; option.textContent = `${albumLabel(album.path)} (${album.count})`; $('album-filter').append(option); }
+    if (currentAlbum !== null) {
+      const index = albums.findIndex(album => album.path === currentAlbum);
+      if (index >= 0) $('album-filter').selectedIndex = index + 1;
+      else { currentAlbum = null; $('album-filter').selectedIndex = 0; }
+    }
   }
   function setFolder(url) {
     folder = driveUrl(url); $('drive-folder-link').hidden = !folder; if (folder) $('drive-folder-link').href = folder;
@@ -39,16 +45,49 @@ export function createGallery(api, isPreview) {
     }
   }
   function applyFilters() { currentAlbum = $('album-filter').selectedIndex === 0 ? null : $('album-filter').value; currentQuery = $('filename-filter').value.trim(); load(true); }
+  async function refresh(force = false) {
+    if (isPreview) { if (force) await load(true); return; }
+    if (!metadataReady) { if (force) window.dispatchEvent(new Event('partyface-reconnect')); return; }
+    if (busy || refreshing || (!force && (document.hidden || $('browse-panel').hidden || $('photo-viewer').open || !$('browse-live').checked))) return;
+    refreshing = true; $('browse-refresh').disabled = true;
+    const mine = sequence;
+    try {
+      if (force) $('browse-live-status').textContent = t('galleryChecking');
+      const info = await api('info');
+      if (mine !== sequence) return;
+      if (!force && info.photo_count === eventPhotoCount) return;
+      setAlbums(info.albums || []); setFolder(info.drive_url);
+      const target = Math.max(24, Math.ceil(offset / 24) * 24), fresh = [];
+      let nextTotal = 0;
+      for (let pageOffset = 0; pageOffset < target; pageOffset += 24) {
+        const data = await api('browse', { album: currentAlbum, query: currentQuery, offset: pageOffset });
+        if (mine !== sequence) return;
+        fresh.push(...data.photos); nextTotal = data.total;
+        if (!data.photos.length || fresh.length >= nextTotal) break;
+      }
+      photos = fresh; offset = fresh.length; total = nextTotal; eventPhotoCount = info.photo_count;
+      $('browse-gallery').replaceChildren(...photos.map(photo => photoCard(photo, () => photos)));
+      $('browse-count').textContent = t('galleryCount', { count: total });
+      $('event-count').textContent = t('photoCount', { count: info.photo_count });
+      $('browse-more').hidden = offset >= total; $('browse-empty').hidden = total !== 0; $('browse-recovery').hidden = true;
+      updateStatus(t('shown', { shown: offset, total })); $('browse-live-status').textContent = t('galleryUpdated');
+    } catch {
+      if (mine === sequence) { $('browse-live').checked = false; $('browse-live-status').textContent = t('livePaused'); }
+    } finally { refreshing = false; $('browse-refresh').disabled = false; }
+  }
+  $('browse-refresh').addEventListener('click', () => refresh(true));
+  setInterval(() => refresh(), 30000);
   $('browse-filters').addEventListener('submit', event => { event.preventDefault(); applyFilters(); });
   $('album-filter').addEventListener('change', applyFilters);
   $('browse-more').addEventListener('click', () => load());
   $('browse-retry').addEventListener('click', () => { if (!metadataReady && !isPreview) window.dispatchEvent(new Event('partyface-reconnect')); else load(photos.length === 0); });
   $('clear-filters').addEventListener('click', () => { $('album-filter').selectedIndex = 0; $('filename-filter').value = ''; applyFilters(); });
+  setAlbums([]);
   if (isPreview) { $('browse-demo-notice').hidden = false; setAlbums(['活动', '工作组', '赞助'].map(path => ({ path, count: 10 }))); }
   return {
     enter() { if (!metadataReady && !isPreview) { if (!metadataFailed) updateStatus(t('connecting')); return; } if (!initialized) load(true); },
     setFolder,
     fail(message) { metadataFailed = true; updateStatus(message || t('galleryUnavailable'), true); $('browse-recovery').hidden = false; },
-    configure(info) { metadataReady = true; metadataFailed = false; setAlbums(info.albums || []); setFolder(info.drive_url); if (!$('browse-panel').hidden) load(true); },
+    configure(info) { metadataReady = true; metadataFailed = false; eventPhotoCount = info.photo_count; $('browse-live').disabled = false; setAlbums(info.albums || []); setFolder(info.drive_url); if (!$('browse-panel').hidden) load(true); },
   };
 }
