@@ -1,0 +1,4 @@
+project_id = "party-face"
+[functions.search-photos]
+verify_jwt = false
+

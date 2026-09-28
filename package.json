@@ -1,0 +1,7 @@
+{
+  "name": "partyface",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Free event-photo search with browser face recognition, Supabase and Google Drive"
+}

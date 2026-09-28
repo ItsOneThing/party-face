@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#009246">
+  <title>partyface · 找到属于你的瞬间</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="gallery.css">
+  <script src="config.js"></script><script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><span class="header-note">一起发生的故事，留给每一个你。</span><button class="language-toggle" id="language-toggle" type="button">Italiano</button><span class="event-pill"><i></i><span id="event-pill">迎新会 2026</span></span></header>
+  <main>
+    <section class="hero event-hero">
+      <div class="hero-copy"><p class="eyebrow">EVENT PHOTO GALLERY</p><h1 id="event-title">迎新会 2026</h1><p class="intro">找到有你的照片，也可以浏览这场活动的全部瞬间。</p><div class="hero-meta"><span class="small-star">✳</span><span id="event-count">活动照片 · 按人像查找</span><span class="meta-divider"></span><span id="hero-credit">passion lab polimi摄影社</span></div></div>
+      <div class="event-badge" aria-hidden="true"><span>✳</span><strong>partyface</strong><small>PHOTO GALLERY</small></div>
+    </section>
+    <div class="photo-tabs" role="tablist" aria-label="照片查找方式">
+      <button id="tab-search" class="photo-tab active" role="tab" aria-selected="true" aria-controls="search-panel" tabindex="0"><span id="tab-search-label">自拍找照片</span><span id="new-feature" class="new-badge">新功能</span></button>
+      <button id="tab-browse" class="photo-tab" role="tab" aria-selected="false" aria-controls="browse-panel" tabindex="-1"><span id="tab-browse-label">浏览全部照片</span><span class="tab-arrow">↗</span></button>
+    </div>
+    <section id="search-panel" role="tabpanel" aria-labelledby="tab-search">
+    <section class="search-layout" aria-label="自拍找照片">
+      <div class="search-card"><div class="card-top"><span class="step-label">01 / FIND YOUR MOMENTS</span><span class="local-pill">● 自拍在本机处理</span></div><h2>从一张自拍开始</h2><p class="card-description">选一张正面、清晰、只有你自己的照片。</p>
+        <label class="dropzone" id="dropzone" for="selfie"><input id="selfie" type="file" accept="image/jpeg,image/png,image/webp"><span class="upload-icon" id="upload-icon">↥</span><img id="selfie-preview" alt="你选择的自拍预览" hidden><strong id="file-label">点击选择自拍</strong><span id="file-hint">JPG、PNG 或 WebP · 最大 15 MB</span><span class="choose-tag">从相册选择 ↗</span></label>
+        <label class="consent"><input type="checkbox" id="consent"><span>我同意用自己的自拍做人脸检索。自拍原图留在本机，人脸特征会发送到后端用于本次查询。<button class="text-button" id="privacy-button" type="button">了解详情</button></span></label>
+        <button class="primary" id="search-button" disabled><span>找我的照片</span><span>↗</span></button><p class="status" id="status" role="status" aria-live="polite">无需注册，无需安装 App。</p><button id="fallback-browse" class="text-button fallback-button" type="button" hidden>识别遇到问题？直接浏览全部照片 →</button>
+      </div>
+      <aside class="how-card"><p class="eyebrow">A SMALL GUIDE</p><h2>三步，把回忆带走。</h2><ol><li><span>01</span><div><strong>选一张你的自拍</strong><p>正面、光线充足的照片更容易找到你。</p></div></li><li><span>02</span><div><strong>找到有你的瞬间</strong><p>只查询这场活动，单人照、合照一起找。</p></div></li><li><span>03</span><div><strong>去 Drive 带走原图</strong><p>点击结果中的原图链接，查看或下载。</p></div></li></ol><div class="side-note"><span>✦</span><p>第一次使用会加载识别模型。<br>没找到？换一张清晰的自拍再试试。</p></div></aside>
+    </section>
+    <section id="setup-banner" class="setup-banner" hidden><div><strong>这是尚未连接活动数据的网站预览</strong><p>接入 Supabase 并导入照片后，就能真正开始查找。</p></div><button id="demo-button" class="secondary">查看结果界面示例 ↗</button></section>
+    <section id="results" class="results" hidden><div class="results-heading"><div><p class="eyebrow">YOUR LITTLE COLLECTION</p><h2 id="results-title">属于你的瞬间</h2><p id="results-description"></p></div><button id="reset-button" class="secondary">换一张自拍 ↻</button></div><div id="gallery" class="gallery"></div><div id="empty-result" class="empty-result" hidden><span>✳</span><h3>这次暂时没找到</h3><p>试试另一张正面自拍。侧脸、遮挡或远处的小脸可能漏检。</p><button id="empty-browse" class="secondary" type="button">浏览全部照片 →</button></div><button id="more-button" class="secondary more" hidden>加载更多照片 ↓</button><div class="result-fallback"><span id="result-fallback-label">还没找全？你也可以浏览全部照片。</span><button id="result-browse" class="text-button" type="button">打开完整相册 →</button></div></section>
+    </section>
+    <section id="browse-panel" role="tabpanel" aria-labelledby="tab-browse" hidden>
+      <div class="browse-heading"><div><p class="eyebrow" id="browse-eyebrow">THE COMPLETE GALLERY</p><h2 id="browse-title">这场活动的所有瞬间</h2><p id="browse-description">不用自拍，按分类浏览。点开照片放大，再到 Drive 下载原图。</p></div><button class="secondary" id="browse-to-search" type="button">试试自拍查找 ↗</button></div>
+      <div id="browse-demo-notice" class="gallery-notice" hidden>这是界面示例，展示的是插画，不是真实活动照片。</div>
+      <form class="browse-toolbar" id="browse-filters"><div class="filter-field"><label for="album-filter" id="album-label">照片分类</label><select id="album-filter"><option value="">全部分类</option></select></div><div class="filter-field filter-search"><label for="filename-filter" id="filename-label">按文件名查找（可选）</label><input id="filename-filter" type="search" maxlength="100" placeholder="例如 A14" autocomplete="off"></div><button class="secondary" id="filter-submit" type="submit">筛选</button></form>
+      <div class="browse-summary"><span id="browse-count"></span><span id="browse-status" role="status" aria-live="polite"></span></div>
+      <div id="browse-gallery" class="gallery browse-gallery"></div>
+      <div id="browse-empty" class="empty-result" hidden><span>✳</span><h3 id="browse-empty-title">这个分类暂时没有照片</h3><p id="browse-empty-description">换一个分类或清除文件名筛选试试。</p><button id="clear-filters" class="secondary" type="button">清除筛选</button></div>
+      <button class="secondary more" id="browse-more" type="button" hidden>加载更多照片 ↓</button>
+      <div id="browse-recovery" class="gallery-recovery" hidden><strong id="browse-error-title">相册暂时无法加载</strong><p id="browse-error-description">可以重试；如果网站服务暂时不可用，也可以直接打开原始 Drive 相册。</p><div><button class="secondary" id="browse-retry" type="button">重新加载</button><a class="secondary" id="drive-folder-link" target="_blank" rel="noopener noreferrer" hidden>打开 Drive 相册 ↗</a></div></div>
+    </section>
+  </main>
+  <footer><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><div class="footer-info"><span id="footer-contact">有任何问题，可以找OneThing</span><span id="footer-credit">照片来源：passion lab polimi摄影社</span></div><button id="footer-privacy" class="text-button">隐私说明</button></footer>
+  <dialog id="photo-viewer" class="photo-viewer" aria-labelledby="viewer-name"><button id="viewer-close" class="viewer-close" aria-label="关闭照片预览" type="button">×</button><div class="viewer-top"><span id="viewer-position"></span><span id="viewer-demo"></span></div><div class="viewer-stage"><button id="viewer-prev" class="viewer-nav" aria-label="上一张" type="button">‹</button><img id="viewer-image" alt="照片预览"><button id="viewer-next" class="viewer-nav" aria-label="下一张" type="button">›</button></div><div class="viewer-bottom"><div><strong id="viewer-name"></strong><p id="viewer-note">这是预览图，完整画质请打开 Drive 原图。</p></div><a id="viewer-original" class="primary" target="_blank" rel="noopener noreferrer">查看或下载原图 ↗</a></div></dialog>
+  <dialog id="privacy-dialog"><button class="dialog-close" id="close-privacy" aria-label="关闭">×</button><p class="eyebrow">YOUR PHOTO, YOUR CHOICE</p><h2>关于你的自拍</h2><p>自拍原图在浏览器本地处理，不发送给服务器。浏览器生成的 128 维人脸特征会发送到活动查询接口，用于寻找相似人脸；应用不会将查询特征写入数据库，也不会主动记录自拍或查询特征。</p><p>后端保存的是提前从活动照片提取的人脸特征、照片信息和缩略图。活动链接可转发，上传自拍也不构成身份验证。匹配可能出现漏检或误匹配。</p><p>Google Drive 原图遵循文件自身的分享和下载权限。网站关闭不会自动取消 Drive 分享。托管平台仍可能记录 IP、请求时间等运行日志。</p><p>如需关闭活动或删除活动索引，请联系活动组织者。请只使用自己的自拍。</p></dialog>
+</body></html>
+
