@@ -1,7 +1,11 @@
 import { loadModels, imageFromBlob, detectFaces, MODEL_VERSION } from './recognition.js';
 const $ = id => document.getElementById(id);
 let session, pending = [], busy = false, stop = false, index = 0;
+let totalPhotos = 0, savedCount = 0, failedCount = 0;
 function log(text) { $('log').textContent += text + '\n'; $('log').scrollTop = $('log').scrollHeight; }
+function updateSummary(completed = index) {
+  $('summary').textContent = `${totalPhotos} 张照片 · ${savedCount} 张已完成 · ${Math.max(0, pending.length - completed)} 张待处理${failedCount ? ` · ${failedCount} 张失败待重试` : ''}`;
+}
 async function api(path, payload) {
   const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Local-Session': session }, body: JSON.stringify(payload) });
   const body = await response.json(); if (!response.ok) throw new Error(body.error || '导入失败'); return body;
@@ -23,7 +27,7 @@ $('scan').addEventListener('click', async () => {
   try {
     const data = await api('/api/scan', { title: $('title').value, title_it: $('title-it').value, slug: $('slug').value, folder: $('folder').value, recognize: $('face-enabled').checked });
     pending = data.pending; index = 0; $('log').textContent = '';
-    $('summary').textContent = `${data.total} 张照片 · ${data.skipped} 张已处理 · ${pending.length} 张待导入`;
+    totalPhotos = data.total; savedCount = data.skipped; failedCount = 0; updateSummary();
     $('progress').max = Math.max(pending.length, 1); $('progress').value = 0; $('import-panel').hidden = false;
     for (const warning of data.warnings) log(warning);
     $('admin-status').textContent = '扫描完成。活动公开前，请检查样本识别效果和 Drive 下载权限。';
@@ -56,10 +60,10 @@ $('import').addEventListener('click', async () => {
           catch (error) { log(`本张识别失败：${error.message}。保留照片供浏览，后续扫描可重试。`); }
           finally { if (canvas) canvas.width = canvas.height = 1; }
         }
-        await api('/api/save', { id: photo.id, model: MODEL_VERSION, faces, indexed }); successful++;
-        $('publish').dataset.available = 'yes'; log(indexed ? `✓ 已保存 ${faces.length} 张人脸${faces.length ? '' : '（照片仍可浏览，请检查是否漏检）'}` : '✓ 已导入浏览相册，人脸索引待补建。');
-      } catch (error) { log(`✗ ${error.message}；重新扫描可重试。`); }
-      finally { if (url) URL.revokeObjectURL(url); $('import-preview').hidden = true; $('progress').value = index + 1; }
+        await api('/api/save', { id: photo.id, model: MODEL_VERSION, faces, indexed }); successful++; savedCount++;
+        $('publish').dataset.available = 'yes'; log(indexed ? `✓ 缩略图已上传，已保存 ${faces.length} 个人脸记录${faces.length ? '' : '（照片仍可浏览，请检查是否漏检）'}` : '✓ 缩略图已上传，人脸索引待补建。');
+      } catch (error) { failedCount++; log(`✗ ${error.message}；重新扫描可重试。`); }
+      finally { if (url) URL.revokeObjectURL(url); $('import-preview').hidden = true; $('progress').value = index + 1; updateSummary(index + 1); }
       await new Promise(resolve => setTimeout(resolve, 30));
     }
     log(stop ? '已暂停，可以继续导入。' : `本轮结束，成功保存 ${successful} 张。失败项请重新扫描重试。`);
