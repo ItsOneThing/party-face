@@ -43,6 +43,14 @@ function renderViewer() {
   $('viewer-note').textContent = photo.demo ? t('demoDescription') : t('viewerNote');
 }
 export function initViewer() {
+  const viewer = $('photo-viewer');
+  let pressedOnBlank = false;
+  viewer.addEventListener('pointerdown', event => { pressedOnBlank = event.target === viewer; });
+  viewer.addEventListener('pointercancel', () => { pressedOnBlank = false; });
+  viewer.addEventListener('click', event => {
+    if (pressedOnBlank && event.target === viewer) viewer.close();
+    pressedOnBlank = false;
+  });
   $('viewer-close').addEventListener('click', () => $('photo-viewer').close());
   $('viewer-prev').addEventListener('click', () => { if (current > 0) { current--; renderViewer(); } });
   $('viewer-next').addEventListener('click', () => { if (current < collection.length - 1) { current++; renderViewer(); } });
