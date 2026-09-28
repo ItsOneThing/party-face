@@ -151,7 +151,7 @@ def make_event(payload):
     else:
         key = secrets.token_urlsafe(32)
         event = cloud('/rest/v1/events', 'POST', {'slug': slug, 'title': title, 'title_it': title_it, 'drive_folder_id': folder,
-                      'model_version': MODEL, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
+                      'model_version': MODEL, 'threshold': 0.42, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
         saved = {'id': event['id'], 'key': key, 'title': title, 'folder': folder}
         settings[slug] = saved
     save_settings(settings)

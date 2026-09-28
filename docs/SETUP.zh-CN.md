@@ -36,7 +36,7 @@ Python 依赖仅 Pillow。网页不需要 npm 安装或前端构建。服务仅�
 ## 1. 创建 Supabase 免费项目
 
 1. 在 <https://supabase.com/dashboard> 创建 **Free** 组织和项目。建议选择靠近参加者的区域。不要升级到付费计划。
-2. 打开项目 SQL Editor，依次运行 `supabase/migrations/001_party_face.sql` 和 `supabase/migrations/002_gallery.sql`（各一次）。这会创建私有人脸表、活动表、匹配/浏览函数和私有缩略图 bucket。已运行 001 的项目只需运行 002，再更新 Edge Function。
+2. 打开项目 SQL Editor，依次运行 `supabase/migrations/001_party_face.sql`、`supabase/migrations/002_gallery.sql` 和 `supabase/migrations/003_stricter_matching.sql`（各一次）。这会创建私有人脸表、活动表、匹配/浏览函数和私有缩略图 bucket，并设置新活动的保守匹配阈值。已运行的迁移不用重复执行。
 3. 在项目设置找到 Project URL，以及后端使用的 `service_role` JWT API key 或 `sb_secret_...` secret key。填入本机 `.env`：
 
 ```dotenv
@@ -118,7 +118,7 @@ GitHub Pages 有容量、流量和用途限制；若以后变成商业 SaaS，�
 - <https://supabase.com/docs/guides/platform/billing-on-supabase>
 - <https://supabase.com/docs/guides/platform/free-project-pausing>
 
-不使用 Realtime 持续连接。每页 24 张缩略图，滚动/点击再加载，原图下载不经过 Supabase。匹配是**当前活动内的精确欧氏距离搜索**，同一照片去重后分页，不用固定 top-k 截断整个结果集。默认阈值 0.50 需要真实样本校准，不能把距离当准确率。人脸非常多时，精确扫描可能慢，需要实测后决定是否优化。
+不使用 Realtime 持续连接。每页 24 张缩略图，滚动/点击再加载，原图下载不经过 Supabase。匹配是**当前活动内的精确欧氏距离搜索**，同一照片去重后分页，不用固定 top-k 截断整个结果集。003 将新活动的默认阈值收紧至 0.42，但保留已有活动的设置。这个默认值未经真实样本校准，不能把距离当准确率。阈值越低越严格，通常会减少误匹配，也可能漏掉侧脸、模糊或小脸。当前活动可在 Supabase 的 events 表调整 threshold，不需要重新导入照片或部署 Edge Function；调整后重新搜索。建议用确认有本人和没有本人的照片验证，再决定是否继续调整。人脸非常多时，精确扫描可能慢，需要实测后决定是否优化。
 
 识别模型资源约 12.5 MB，加上识别库约 13 MB。它们从 GitHub Pages 下载，不占 Supabase 出站流量；手机首次加载取决于网络，不能保证几秒完成。后续由浏览器 HTTP 缓存尽量复用。
 

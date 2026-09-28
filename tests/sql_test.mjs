@@ -14,6 +14,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
   grant usage on schema public to anon, authenticated, service_role;`);
 await db.exec(readFileSync(new URL('../supabase/migrations/001_party_face.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../supabase/migrations/002_gallery.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../supabase/migrations/003_stricter_matching.sql', import.meta.url), 'utf8'));
 const model = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1';
 const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 for (let i = 0; i < 2; i++) await db.query(`insert into events(id,slug,title,token_hash,drive_folder_id,model_version,active) values($1,$2,'Event',$3,'folder',$4,true)`, [ids[i], `event-${i}`, 'a'.repeat(64), model]);
@@ -41,6 +42,15 @@ assert.equal((await browse(ids[0], null, 'no-face')).total, 1);
 assert.equal((await browse(ids[0], null, '%')).total, 0);
 assert.equal((await browse(ids[0], 'unknown')).total, 0);
 assert.equal((await match(0)).total, 40);
+// A synthetic distance of .45 must be rejected at .42 but accepted at .50.
+// This checks cutoff behavior, not recognition accuracy on real people.
+const borderline = [...descriptor]; borderline[0] += .45;
+await importPhoto(ids[0], 'borderline', JSON.stringify([{ descriptor: borderline, box: {} }]));
+assert.equal((await match(0)).total, 40);
+await db.query('update events set threshold=.50 where id=$1', [ids[0]]);
+assert.equal((await match(0)).total, 41);
+await db.query('update events set threshold=.42 where id=$1', [ids[0]]);
+await db.query('delete from photos where event_id=$1 and drive_file_id=$2', [ids[0], 'borderline']);
 const summary = (await db.query('select gallery_summary($1) as summary', [ids[0]])).rows[0].summary;
 assert.equal(summary.photo_count, 41); assert.equal(summary.indexed_photo_count, 40);
 await assert.rejects(() => importPhoto(ids[0], 'photo-0', JSON.stringify([{ descriptor: [1], box: {} }])));
@@ -65,4 +75,4 @@ assert.equal((await db.query(`select consume_budget($1,$2,'search') as permit`, 
 assert.equal((await db.query(`select consume_budget($1,$2,'browse') as permit`, [ids[0], 'c'.repeat(64)])).rows[0].permit, true);
 assert.equal((await db.query(`select public from storage.buckets where id='event-thumbnails'`)).rows[0].public, false);
 await db.close();
-console.log('Postgres integration passed: both migrations, browse of unindexed photos, album/filename filters, full pagination, event isolation, rollback, visitor access denial, expiry and rate limits.');
+console.log('Postgres integration passed: all migrations, stricter matching cutoff, browse of unindexed photos, album/filename filters, full pagination, event isolation, rollback, visitor access denial, expiry and rate limits.');

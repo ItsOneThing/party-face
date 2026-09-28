@@ -75,7 +75,7 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql) 和 [002](supabase/migrations/002_gallery.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 和 [003](supabase/migrations/003_stricter_matching.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
