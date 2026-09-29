@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
       !/^[a-z0-9][a-z0-9-]{1,63}$/.test(input.event) || typeof input.key !== "string" || !/^[A-Za-z0-9_-]{32,100}$/.test(input.key))
       return reply(400, { error: "活动链接不完整或无效。" });
     const tokenHash = await hash(input.key);
-    const events = await backend(`/rest/v1/events?slug=eq.${encodeURIComponent(input.event)}&token_hash=eq.${tokenHash}&active=eq.true&select=id,title,title_it,expires_at,model_version,drive_folder_id,published_group_revision`);
+    const events = await backend(`/rest/v1/events?slug=eq.${encodeURIComponent(input.event)}&token_hash=eq.${tokenHash}&active=eq.true&select=id,title,title_it,photo_credit,photo_credit_it,contact_name,expires_at,model_version,drive_folder_id,published_group_revision`);
     const event = events[0];
     if (!event || (event.expires_at && new Date(event.expires_at) <= new Date())) return reply(404, { error: "活动不存在、尚未开放或已关闭。请联系组织者。" });
     if (input.action === "search") {
@@ -65,7 +65,9 @@ Deno.serve(async (req: Request) => {
     if (input.action === "info") {
       const summary = await backend("/rest/v1/rpc/gallery_summary", { p_event: event.id });
       const folder = event.drive_folder_id;
-      return reply(200, { title: input.lang === "it" ? (event.title_it || event.title) : event.title, model: event.model_version, ...summary,
+      return reply(200, { title: input.lang === "it" ? (event.title_it || event.title) : event.title,
+        photo_credit: input.lang === "it" ? (event.photo_credit_it || event.photo_credit) : event.photo_credit,
+        contact_name: event.contact_name, model: event.model_version, ...summary,
         drive_url: /^[A-Za-z0-9_-]{10,100}$/.test(folder || "") ? `https://drive.google.com/drive/folders/${folder}` : null });
     }
     const result = input.action === "browse"

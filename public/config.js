@@ -6,6 +6,5 @@ window.PARTY_CONFIG = {
   supabasePublishableKey: "sb_publishable_EDxmJNNu8y6KGyur6olr0A_jGVHfzhF",
   adminEndpoint: "https://mfpgjoscxvaltxpwynbx.supabase.co/functions/v1/admin-groups",
   defaultEvent: "welcome-2026",
-  defaultTitle: "迎新会 2026",
   defaultDriveFolder: "https://drive.google.com/drive/folders/1Rruj0bvN9gZzSbvtwEVbPRoUshQ0-X7x"
 };

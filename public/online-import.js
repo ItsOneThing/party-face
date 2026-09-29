@@ -7,7 +7,7 @@ const config=window.parent.PARTY_CONFIG, endpoint=new URL('admin-import',config.
 let pending=[],index=0,total=0,saved=0,failed=0,busy=false,stop=false,slug='',available=false,active=false;
 function log(text){$('log').textContent+=text+'\n';$('log').scrollTop=$('log').scrollHeight;}
 function summary(){ $('summary').textContent=`${total} 张照片 · ${saved} 张已完成 · ${Math.max(0,pending.length-index)} 张待处理${failed?' · '+failed+' 张失败待重试':''}`;}
-function setBusy(value){busy=value;transport.setBusy(value);for(const id of ['scan','title','title-it','slug','folder','face-enabled','import','publish','close'])$(id).disabled=value;$('stop').disabled=!value;}
+function setBusy(value){busy=value;transport.setBusy(value);for(const id of ['scan','title','title-it','photo-credit','photo-credit-it','contact-name','slug','folder','load-event','new-event','face-enabled','import','publish','close'])$(id).disabled=value;$('stop').disabled=!value;}
 function controls(){setBusy(false);$('import').disabled=index>=pending.length;$('publish').disabled=!available;$('close').disabled=!active;}
 async function api(action,payload={},binary=false){
  const generation=transport.generation(),access=await transport.token();
@@ -17,16 +17,39 @@ async function api(action,payload={},binary=false){
  if(!response.ok){let data={};try{data=await response.json();}catch{}throw new Error(data.error||`在线导入失败（HTTP ${response.status}）。`);}
  return binary?response.blob():response.json();
 }
-$('title').value=config.defaultTitle||'';$('slug').value=config.defaultEvent||'';$('folder').value=config.defaultDriveFolder||'';
+$('slug').value=config.defaultEvent||'';
+let loadedSlug='';
+async function loadEvent(){
+ const wanted=$('slug').value.trim();if(!wanted)return;
+ const data=await api('details',{slug:wanted});
+ $('title').value=data.title;$('title-it').value=data.title_it;
+ $('photo-credit').value=data.photo_credit;$('photo-credit-it').value=data.photo_credit_it;
+ $('contact-name').value=data.contact_name;
+ $('folder').value='https://drive.google.com/drive/folders/'+data.folder;
+ loadedSlug=wanted;$('admin-status').textContent='已载入活动资料。修改后点击扫描即可保存。';
+}
+$('load-event').addEventListener('click',async()=>{try{await loadEvent();}catch(error){$('admin-status').textContent=error.message;}});
+$('new-event').addEventListener('click',()=>{
+ for(const id of ['title','title-it','photo-credit','photo-credit-it','contact-name','slug','folder'])$(id).value='';
+ loadedSlug='';$('face-enabled').checked=false;$('admin-status').textContent='填写新活动资料；人脸索引默认关闭。';$('title').focus();
+});
+$('slug').addEventListener('change',()=>{
+ if(loadedSlug && $('slug').value.trim()!==loadedSlug){
+  for(const id of ['title','title-it','photo-credit','photo-credit-it','contact-name','folder'])$(id).value='';
+  loadedSlug='';$('face-enabled').checked=false;
+  $('admin-status').textContent='活动编号已变化，请载入已有活动或填写新活动资料。';
+ }
+});
 try{
  const data=await api('config');$('scan').disabled=!data.configured;
  $('admin-status').textContent=data.configured?'在线导入已就绪。请选择你负责的活动，或创建新活动。':'在线导入尚未配置 Drive API 密钥，请联系负责人。';
+ if(data.configured && $('slug').value)await loadEvent();
 }catch(error){$('admin-status').textContent=error.message;}
 $('scan').addEventListener('click',async()=>{
  if(busy)return;setBusy(true);$('share').hidden=true;$('import-panel').hidden=true;pending=[];index=0;failed=0;saved=0;available=false;active=false;stop=false;slug=$('slug').value.trim();
  $('admin-status').textContent='正在扫描 Drive 文件夹…';$('log').textContent='';
  try{
-  const data=await api('prepare',{slug,title:$('title').value.trim(),title_it:$('title-it').value.trim(),folder:$('folder').value});
+  const data=await api('prepare',{slug,title:$('title').value.trim(),title_it:$('title-it').value.trim(),photo_credit:$('photo-credit').value.trim(),photo_credit_it:$('photo-credit-it').value.trim(),contact_name:$('contact-name').value.trim(),folder:$('folder').value});
   const checkpoints=new Map(data.checkpoints.map(p=>[p.drive_file_id,p]));active=data.active;
   const queue=[{id:data.root,album:''}],visited=new Set(),photos=new Map();
   while(queue.length){

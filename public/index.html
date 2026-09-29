@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#009246">
+  <meta name="theme-color" content="#f7f4ee">
   <title>partyface · 找到属于你的瞬间</title>
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="gallery.css"><link rel="stylesheet" href="polish.css">
   <script src="config.js"></script><script type="module" src="app.js"></script>
-<script type="module" src="admin-entry.js"></script><link rel="stylesheet" href="admin-ui.css"></head>
+<script type="module" src="admin-entry.js"></script><link rel="stylesheet" href="admin-ui.css"><link rel="stylesheet" href="theme.css"></head>
 <body>
-  <header class="site-header"><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><span class="header-note">一起发生的故事，留给每一个你。</span><button class="language-toggle" id="language-toggle" type="button">Italiano</button><span class="event-pill"><i></i><span id="event-pill">迎新会 2026</span></span></header>
+  <header class="site-header"><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><span class="header-note">一起发生的故事，留给每一个你。</span><button class="language-toggle" id="language-toggle" type="button">Italiano</button><span class="event-pill"><i></i><span id="event-pill">活动照片</span></span></header>
   <main>
     <section class="hero event-hero">
-      <div class="hero-copy"><p class="eyebrow">EVENT PHOTO GALLERY</p><h1 id="event-title">迎新会 2026</h1><p class="intro">找到有你的照片，也可以浏览这场活动的全部瞬间。</p><div class="hero-meta"><span class="small-star">✳</span><span id="event-count">活动照片 · 按人像查找</span><span class="meta-divider"></span><span id="hero-credit">passion lab polimi摄影社</span></div></div>
+      <div class="hero-copy"><p class="eyebrow">EVENT PHOTO GALLERY</p><h1 id="event-title">活动照片</h1><p class="intro">找到有你的照片，也可以浏览这场活动的全部瞬间。</p><div class="hero-meta"><span class="small-star">✳</span><span id="event-count">活动照片 · 按人像查找</span><span class="meta-divider"></span><span id="hero-credit" hidden></span></div></div>
       <div class="event-badge" aria-hidden="true"><span>✳</span><strong>partyface</strong><small>PHOTO GALLERY</small></div>
     </section>
     <div class="photo-tabs" role="tablist" aria-label="照片查找方式">
@@ -43,7 +43,7 @@
       <div id="browse-recovery" class="gallery-recovery" hidden><strong id="browse-error-title">相册暂时无法加载</strong><p id="browse-error-description">可以重试；如果网站服务暂时不可用，也可以直接打开原始 Drive 相册。</p><div><button class="secondary" id="browse-retry" type="button">重新加载</button><a class="secondary" id="drive-folder-link" target="_blank" rel="noopener noreferrer" hidden>打开 Drive 相册 ↗</a></div></div>
     </section>
   </main>
-  <footer><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><div class="footer-info"><span id="footer-contact">有任何问题，可以找OneThing</span><span id="footer-credit">照片来源：passion lab polimi摄影社</span></div><a id="footer-admin" class="text-button" href="online-admin.html">管理后台</a><button id="footer-privacy" class="text-button">隐私说明</button></footer>
+  <footer><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><div class="footer-info"><span id="footer-contact" hidden></span><span id="footer-credit" hidden></span></div><a id="footer-admin" class="text-button" href="online-admin.html">管理后台</a><button id="footer-privacy" class="text-button">隐私说明</button></footer>
   <dialog id="photo-viewer" class="photo-viewer" aria-labelledby="viewer-name"><button id="viewer-close" class="viewer-close" aria-label="关闭照片预览" type="button">×</button><div class="viewer-top"><span id="viewer-position"></span><span id="viewer-demo"></span></div><div class="viewer-stage"><button id="viewer-prev" class="viewer-nav" aria-label="上一张" type="button">‹</button><img id="viewer-image" alt="照片预览"><button id="viewer-next" class="viewer-nav" aria-label="下一张" type="button">›</button></div><div class="viewer-bottom"><div><strong id="viewer-name"></strong><p id="viewer-note">这是预览图，完整画质请打开 Drive 原图。</p></div><a id="viewer-original" class="primary" target="_blank" rel="noopener noreferrer">查看或下载原图 ↗</a></div></dialog>
   <dialog id="privacy-dialog"><button class="dialog-close" id="close-privacy" aria-label="关闭">×</button><p class="eyebrow">YOUR PHOTO, YOUR CHOICE</p><h2>关于你的自拍</h2><p>自拍原图在浏览器本地处理，不发送给服务器。浏览器生成的 128 或 512 维人脸特征会发送到活动查询接口，用于寻找相似人脸；应用不会将查询特征写入数据库，也不会主动记录自拍或查询特征。</p><p>后端保存的是提前从活动照片提取的人脸特征、照片信息和缩略图。活动链接可转发，上传自拍也不构成身份验证。匹配可能出现漏检或误匹配。</p><p>Google Drive 原图遵循文件自身的分享和下载权限。网站关闭不会自动取消 Drive 分享。托管平台仍可能记录 IP、请求时间等运行日志。</p><p>如需关闭活动或删除活动索引，请联系活动组织者。请只使用自己的自拍。</p></dialog>
 </body></html>

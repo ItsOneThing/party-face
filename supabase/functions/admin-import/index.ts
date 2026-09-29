@@ -67,22 +67,31 @@ Deno.serve(async(req:Request)=>{
   if(!user.id||user.is_anonymous||!user.email_confirmed_at)throw new Failure(401,'请使用已确认邮箱的管理员账号。');
   if(!req.headers.get('content-type')?.includes('application/json'))throw new Failure(415,'请求格式错误。');
   const input=await readBody(req);
-  if(!input||!['config','prepare','list','image','save','open'].includes(input.action))throw new Failure(400,'导入操作无效。');
+  if(!input||!['config','details','prepare','list','image','save','open'].includes(input.action))throw new Failure(400,'导入操作无效。');
   if(input.action==='config')return reply(200,{configured:!!DRIVE,canCreate:CREATORS.includes(user.id)});
   if(typeof input.slug!=='string'||!/^[a-z0-9][a-z0-9-]{1,63}$/.test(input.slug))throw new Failure(400,'活动编号无效。');
+  if(input.action==='details'){
+   const event=await owned(input.slug,user.id);
+   return reply(200,{title:event.title,title_it:event.title_it||'',folder:event.drive_folder_id,
+    photo_credit:event.photo_credit||'',photo_credit_it:event.photo_credit_it||'',contact_name:event.contact_name||''});
+  }
   if(input.action==='prepare'){
    const folder=String(input.folder||'').match(/(?:\/folders\/)?([A-Za-z0-9_-]{10,100})(?:[?/#]|$)/)?.[1];
    if(!folder||typeof input.title!=='string'||!input.title.trim()||input.title.length>100||typeof(input.title_it||'')!=='string'||(input.title_it||'').length>100)throw new Failure(400,'请填写有效活动名称和 Drive 文件夹。');
+   const fields=['photo_credit','photo_credit_it','contact_name'] as const;
+   const max={photo_credit:120,photo_credit_it:120,contact_name:80};
+   for(const field of fields)if(typeof(input[field]??'')!=='string'||(input[field]||'').trim().length>max[field])throw new Failure(400,'活动展示文字过长。');
+   const presentation=Object.fromEntries(fields.map(field=>[field,(input[field]||'').trim()||null]));
    const existing=await cloud('/rest/v1/events?slug=eq.'+input.slug+'&select=id');
    let event;
    if(existing.length){event=await owned(input.slug,user.id);if(event.drive_folder_id!==folder)throw new Failure(409,'活动已使用其他文件夹，请用新的活动编号。');}
    else{
     if(!CREATORS.includes(user.id))throw new Failure(403,'你可导入已有的负责人活动；创建新活动需配置 Supabase 的 IMPORT_ADMIN_IDS。');
     const root=await(await drive('files/'+folder,{fields:'mimeType'})).json();if(root.mimeType!=='application/vnd.google-apps.folder')throw new Failure(400,'请选择 Drive 文件夹。');
-    event=(await cloud('/rest/v1/events','POST',{slug:input.slug,title:input.title.trim(),title_it:input.title_it||null,drive_folder_id:folder,model_version:MODEL,threshold:.75,token_hash:await hex(crypto.getRandomValues(new Uint8Array(32)))},{Prefer:'return=representation'}))[0];
+    event=(await cloud('/rest/v1/events','POST',{slug:input.slug,title:input.title.trim(),title_it:input.title_it||null,...presentation,drive_folder_id:folder,model_version:MODEL,threshold:.75,token_hash:await hex(crypto.getRandomValues(new Uint8Array(32)))},{Prefer:'return=representation'}))[0];
     try{await cloud('/rest/v1/event_admins','POST',{event_id:event.id,user_id:user.id,role:'owner'});}catch(error){await cloud('/rest/v1/events?id=eq.'+event.id,'DELETE');throw error;}
    }
-   await cloud('/rest/v1/events?id=eq.'+event.id,'PATCH',{title:input.title.trim(),title_it:input.title_it||null});
+   await cloud('/rest/v1/events?id=eq.'+event.id,'PATCH',{title:input.title.trim(),title_it:input.title_it||null,...presentation});
    const checkpoints=[];let offset=0;
    while(true){const page=await cloud('/rest/v1/photos?event_id=eq.'+event.id+'&select=drive_file_id,fingerprint,model_version,face_indexed&order=id&limit=1000&offset='+offset);checkpoints.push(...page);if(page.length<1000)break;offset+=1000;if(offset>10000)throw new Failure(400,'活动照片过多，请拆分活动。');}
    return reply(200,{root:folder,checkpoints,active:event.active});

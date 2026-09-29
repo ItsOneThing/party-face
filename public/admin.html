@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>partyface · 管理后台</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="person-groups.css"><script src="config.js"></script><script type="module" src="online-admin.js"></script><link rel="stylesheet" href="admin-ui.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>partyface · 管理后台</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="person-groups.css"><script src="config.js"></script><script type="module" src="online-admin.js"></script><link rel="stylesheet" href="admin-ui.css"><link rel="stylesheet" href="theme.css"></head>
 <body data-online-admin="true"><main class="groups-main">
 <nav><a href="./">← partyface</a><button id="admin-signout" class="secondary" hidden>退出账号</button></nav>
 <p class="eyebrow">PARTYFACE · TEAM REVIEW</p><h1>活动照片，一个后台管理。</h1>
@@ -23,7 +23,7 @@
 <label class="consent"><input id="group-consent" type="checkbox"><span>我确认照片中的人物已明确同意用于本次人脸识别与分组测试。</span></label>
 <div hidden><input id="group-files" type="file" multiple><button id="group-start"></button><button id="group-stop"></button><button id="group-demo"></button><button id="group-reset"></button></div>
 <p class="admin-note">编辑者可以核对和保存草稿；负责人可以发布。保存遇到版本冲突时，本页修改会保留，请记录修改后重新读取最新草稿。重新读取会替换当前未保存的内容。</p>
-<p id="group-status" role="status" aria-live="polite">勾选授权确认后读取活动。照片导入仍由组织者在本地管理工具完成。</p>
+<p id="group-status" role="status" aria-live="polite">勾选授权确认后读取活动。请先在“导入照片”页签准备活动照片。</p>
 <progress id="group-progress" value="0" max="1" hidden></progress><pre id="group-log"></pre>
 </section>
 <section id="group-review" hidden>

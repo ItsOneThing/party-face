@@ -20,8 +20,8 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 - **相册更新**：手动刷新，或每 30 秒检查新照片；数量变化时更新已加载的页面，保留筛选，页面在后台时暂停自动检查。
 - **照片预览**：点击放大，支持上一张、下一张和键盘左右切换。
 - **Drive 原图**：直接跳转 Google Drive 查看或下载，遵循文件本身的分享权限。
-- **双语界面**：中文 / Italiano，深浅绿色主题和手机适配。
-- **重复使用**：每场活动使用独立编号、文件夹和访问码，支持断点导入与补建索引。
+- **双语界面**：中文 / Italiano，舒适的浅色主题和手机适配。
+- **重复使用**：每场活动使用独立编号、文件夹和访问码；活动名称、意大利语名称、照片来源和联系人也逐场设置，支持断点导入与补建索引。
 - **识别兜底**：零人脸照片仍进入相册；分析失败时可先发布浏览相册，再补做人脸索引。
 
 ## 工作方式
@@ -48,7 +48,7 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 **组织者**
 
 1. 配置 Supabase、Google Drive API 和 GitHub Pages。
-2. 登录在线后台 `online-admin.html`，输入活动名称、编号和照片文件夹。
+2. 登录在线后台 `online-admin.html`，输入活动名称、意大利语名称、照片来源、联系人、编号和照片文件夹。
 3. 扫描并导入照片，检查失败记录和样本识别效果。
 4. 开放活动，先测试，再分享完整活动链接。
 5. 下次活动换一个编号和文件夹，复用同一套系统。
@@ -76,7 +76,7 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 、[005](supabase/migrations/005_person_groups.sql) 和 [006](supabase/migrations/006_online_admin.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 、[005](supabase/migrations/005_person_groups.sql) 、[006](supabase/migrations/006_online_admin.sql) 和 [007](supabase/migrations/007_event_presentation.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 部署 `admin-groups` 和 `admin-import`，配置服务端 Secrets；在 `public/config.js` 填入公开接口地址和 Publishable key。详见 [在线后台指南](docs/ONLINE_ADMIN.zh-CN.md)。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
@@ -117,7 +117,7 @@ cp .env.example .env
 
 界面布局与活动照片查找体验受到 [ENDU 活动照片页面](https://www.endu.net/it/events/polimirunspring/photos) 的启发。partyface 是独立开发的项目，与 ENDU 没有官方关联。
 
-- 照片来源：**passion lab polimi摄影社**。
+- 当前演示活动的照片署名在活动资料中设置为 **PLP 摄影社**，可在以后活动中更换。
 - 人脸检测与五官定位：[face-api.js](https://github.com/justadudewhohacks/face-api.js)，感谢 Vincent Mühler 和上游贡献者；旧活动的 128 维识别特征也由它生成。
 - 新活动的身份相似度特征：FaceNet512，经 [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) 在浏览器运行；模型来源及许可证见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 - 维护者：[ItsOneThing](https://github.com/ItsOneThing)。有任何问题，可以找 OneThing，或提交 [Issue](https://github.com/ItsOneThing/party-face/issues)。
@@ -137,7 +137,7 @@ partyface 自有源码与文档采用 [MIT License](LICENSE)。欢迎使用、�
 
 部署 `supabase/functions/admin-import/index.ts` 为 `admin-import`，关闭网关 Verify JWT（函数内部每次调用 Auth 验证用户，并检查活动 owner）。Secrets 设置 `GOOGLE_DRIVE_API_KEY`、`ALLOWED_ORIGINS`；允许创建新活动的账号 UID 使用 `IMPORT_ADMIN_IDS`，逗号分隔。已有活动 owner 可导入该活动；editor 只能核对分组。新活动创建后为创建人授予 owner，默认关闭查询。
 
-扫描包含子文件夹，自动跳过未修改且已完成的照片。人脸识别默认关闭，仅用于已取得明确同意的照片；模型加载失败时仍可导入浏览，之后重新扫描补建索引。支持 JPG、PNG、WebP。超过 25 MB 的原图会自动读取 Drive 预览图（请求长边 2400 像素），不再因原图大小在扫描时跳过；处理用图片仍限制 25 MB。Drive 暂无预览时会保留失败项供重试，预览压缩可能影响小人脸识别。保持浏览器打开、电脑不要休眠。识别特征及缩略图保存到 Supabase，不把原图保存到 Supabase。较小原图或大图预览的读取会经过 Edge Function，仍受免费计划的请求数、流量和文件限制，不能保证无限免费或大批量同时导入。
+活动展示资料在在线后台逐场填写；编辑已有活动时先点击“载入这个活动的资料”，新活动点击“新建活动”。照片来源与联系人是可选字段，空白时访客页不显示。扫描包含子文件夹，自动跳过未修改且已完成的照片。人脸识别默认关闭，仅用于已取得明确同意的照片；模型加载失败时仍可导入浏览，之后重新扫描补建索引。支持 JPG、PNG、WebP。超过 25 MB 的原图会自动读取 Drive 预览图（请求长边 2400 像素），不再因原图大小在扫描时跳过；处理用图片仍限制 25 MB。Drive 暂无预览时会保留失败项供重试，预览压缩可能影响小人脸识别。保持浏览器打开、电脑不要休眠。识别特征及缩略图保存到 Supabase，不把原图保存到 Supabase。较小原图或大图预览的读取会经过 Edge Function，仍受免费计划的请求数、流量和文件限制，不能保证无限免费或大批量同时导入。
 
 每次“开放活动并生成链接”会更新访问码，旧链接失效；普通照片追加无需重新生成链接。重新导入会使已发布人物组过期，须完成导入后重新读取并核对分组。
 

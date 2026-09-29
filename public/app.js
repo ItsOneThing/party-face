@@ -118,6 +118,10 @@ async function init() {
   try {
     const data = await api('info');
     $('event-title').textContent = data.title; $('event-pill').textContent = data.title;
+    const credit = data.photo_credit || '', contact = data.contact_name || '';
+    $('hero-credit').hidden = !credit; $('hero-credit').textContent = credit;
+    $('footer-credit').hidden = !credit; $('footer-credit').textContent = credit ? t('photoCredit', {name:credit}) : '';
+    $('footer-contact').hidden = !contact; $('footer-contact').textContent = contact ? t('eventContact', {name:contact}) : '';
     $('event-count').textContent = t('photoCount', { count: data.photo_count }); document.title = `${data.title} · partyface`;
     gallery.configure(data);
     await selectModel(data.model || 'face-api-0.22.2-ssd-landmark68-descriptor128-v1');
