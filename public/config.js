@@ -3,7 +3,7 @@ window.PARTY_CONFIG = {
   endpoint: "https://mfpgjoscxvaltxpwynbx.supabase.co/functions/v1/search-photos",
   // Public publishable key (sb_publishable_... or legacy anon), never a service key.
   supabaseUrl: "https://mfpgjoscxvaltxpwynbx.supabase.co",
-  supabasePublishableKey: "",
+  supabasePublishableKey: "sb_publishable_EDxmJNNu8y6KGyur6olr0A_jGVHfzhF",
   adminEndpoint: "https://mfpgjoscxvaltxpwynbx.supabase.co/functions/v1/admin-groups",
   defaultEvent: "welcome-2026",
   defaultTitle: "迎新会 2026",
