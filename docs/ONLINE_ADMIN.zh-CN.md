@@ -23,7 +23,7 @@
 
    `editor` 可以读取、核对和保存；把负责人对应记录的 role 改为 `owner`，才能发布。角色不会通过注册、邮箱或客户端字段自动获得。活动必须使用新模型并已有索引，旧的 128 维活动不显示。
 5. 在项目 **Settings → API Keys** 找公开的 **Publishable key**（`sb_publishable_...`），或 Legacy **anon** key，在 `public/config.js` 填写 `supabasePublishableKey`。`supabaseUrl`、`adminEndpoint` 必须对应同一项目。**绝不能填 Secret key / service_role key**；公开 key 是登录应用的标识，管理员权限仍由登录会话和后端会员表验证。
-6. 检查后发布 GitHub Pages，管理员入口为 `https://itsonething.github.io/party-face/online-admin.html`。本地统一入口为 `http://127.0.0.1:8765/admin.html`：默认显示导入照片，切换人物分组后登录同一 Supabase。原导入页面移到 `import.html`，仍仅本地使用。重启本地服务使本地分组工具使用新的版本检查。
+6. 检查后发布 GitHub Pages，管理员入口为 `https://itsonething.github.io/party-face/online-admin.html`。本地统一入口为 `http://127.0.0.1:8765/admin.html`：先显示登录页面，登录后才允许切换导入照片和人物分组。原导入页面移到 `import.html`，仍仅本地使用。重启本地服务使本地分组工具使用新的版本检查。
 
 这里仅新增文件与配置说明；写代码不会自动执行迁移、建立账号、分配权限或部署云端。
 
@@ -54,3 +54,15 @@ where event_id=(select id from public.events where slug='替换成活动编号')
 Supabase 官方依据：[密码登录](https://supabase.com/docs/reference/javascript/auth-signinwithpassword)、[服务器验证用户](https://supabase.com/docs/reference/javascript/auth-getuser)。
 
 切换管理页签不会重载正在导入的页面，但刷新整个后台、关闭标签页或返回入口会中断本轮浏览器导入。切换到分组后仍应等待导入完成再读取索引。
+
+## 本地导入也先登录
+
+现在两个功能都在登录后显示。导入工具的每个接口（会话、照片下载、扫描、保存、活动开放/关闭）还会向 Supabase Auth 验证登录身份。直接打开 import.html 会返回登录入口。退出或登录过期会卸载导入页面；当前已经发出的请求可能完成，后续导入停止。
+
+在 Authentication → Users 复制允许导入人员的 UID，填入本地 `.env`：
+
+```env
+SUPABASE_IMPORT_ADMIN_IDS=你的账号UID
+```
+
+多个 UID 用英文逗号分隔。这是本机导入权限，可创建、导入和开放活动，仅填写可信的组织者账号；在线 editor/owner 分组权限仍由 event_admins 分别控制。不配置这个名单，登录后仍不能导入。修改后必须重启本地服务。旧的 person-groups.html 保留本机照片实验；活动分组读写请使用登录后的统一后台。

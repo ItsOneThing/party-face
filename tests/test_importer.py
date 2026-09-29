@@ -13,6 +13,23 @@ server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 
 class ImporterTests(unittest.TestCase):
+    def test_import_requires_verified_allowlisted_user(self):
+        with patch.object(server, 'cloud') as mocked:
+            with self.assertRaises(server.LoginRequired): server.import_identity(None)
+            mocked.assert_not_called()
+        token = 'Bearer ' + 'x' * 40
+        user = {'id': 'trusted-id', 'email_confirmed_at': '2026-01-01', 'is_anonymous': False}
+        with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': 'trusted-id'}), patch.object(server, 'cloud', return_value=user) as mocked:
+            self.assertEqual(server.import_identity(token), 'trusted-id')
+            self.assertEqual(mocked.call_args.kwargs['extra']['Authorization'], token)
+        for denied in [dict(user, id='unassigned'), dict(user, is_anonymous=True), dict(user, email_confirmed_at=None)]:
+            with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': 'trusted-id'}), patch.object(server, 'cloud', return_value=denied):
+                with self.assertRaises((server.LoginRequired, server.ImportPermissionDenied)): server.import_identity(token)
+        with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': ''}), patch.object(server, 'cloud', return_value=user):
+            with self.assertRaises(server.ImportPermissionDenied): server.import_identity(token)
+        with patch.object(server, 'cloud', side_effect=ValueError('private message')):
+            with self.assertRaisesRegex(server.LoginRequired, '登录验证失败'): server.import_identity(token)
+
     def test_modern_secret_key_is_not_sent_as_bearer_jwt(self):
         with patch.dict(server.os.environ, {'SUPABASE_URL': 'https://test.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'sb_secret_test'}), patch.object(server, 'request', return_value=b'[]') as mocked:
             server.cloud('/rest/v1/events')

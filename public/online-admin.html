@@ -5,14 +5,15 @@
 <nav><a href="./">← partyface</a><button id="admin-signout" class="secondary" hidden>退出账号</button></nav>
 <p class="eyebrow">PARTYFACE · TEAM REVIEW</p><h1>活动照片，一个后台管理。</h1>
 <p>先导入活动照片，再与管理员一起核对人物分组，准备好后分享给参加者。</p>
+<section id="admin-login" class="admin-card"><h2>管理员登录</h2><p>每位管理员使用自己的账号。负责人分配活动权限后，即可在这里协作核对。</p><form id="admin-login-form"><label for="admin-email">邮箱</label><input id="admin-email" type="email" autocomplete="username" required><label for="admin-password">密码</label><input id="admin-password" type="password" autocomplete="current-password" required><div class="group-actions"><button id="admin-submit" type="submit" class="primary">登录</button></div></form></section>
+<p id="admin-auth-status" role="status" aria-live="polite">正在检查管理后台配置…</p>
+<div id="admin-tools" hidden>
 <div class="admin-tabs" role="tablist" aria-label="管理功能"><button id="admin-import-tab" role="tab" aria-selected="false" aria-controls="admin-import-panel" tabindex="-1" class="secondary">1 · 导入照片</button><button id="admin-review-tab" role="tab" aria-selected="true" aria-controls="admin-review-panel" class="primary">2 · 人物分组</button></div>
 <section id="admin-import-panel" role="tabpanel" aria-labelledby="admin-import-tab" hidden>
 <div id="admin-import-help" class="admin-card"><h2>连接本地导入工具</h2><p id="admin-import-status" role="status">正在检查本地导入工具…</p><p>在组织者电脑双击 start.command，保持终端打开，然后打开本地管理后台。导入期间保持页面打开，电脑不要休眠。</p><a class="primary" href="http://127.0.0.1:8765/admin.html" target="_blank" rel="noopener noreferrer">打开本地管理后台 ↗</a><p class="admin-note">.env 和 Google Drive 密钥保留在组织者电脑。在线后台用于登录、核对与保存分组。</p></div>
 <iframe id="admin-import-frame" title="活动照片导入工具" hidden></iframe>
 </section>
 <section id="admin-review-panel" role="tabpanel" aria-labelledby="admin-review-tab">
-<section id="admin-login" class="admin-card"><h2>管理员登录</h2><p>每位管理员使用自己的账号。负责人分配活动权限后，即可在这里协作核对。</p><form id="admin-login-form"><label for="admin-email">邮箱</label><input id="admin-email" type="email" autocomplete="username" required><label for="admin-password">密码</label><input id="admin-password" type="password" autocomplete="current-password" required><div class="group-actions"><button id="admin-submit" type="submit" class="primary">登录</button></div></form></section>
-<p id="admin-auth-status" role="status" aria-live="polite">正在检查管理后台配置…</p>
 <div id="admin-workspace" hidden>
 <section class="admin-card">
 <h2>保存并发布活动分组</h2>
@@ -33,4 +34,4 @@
 <details><summary>没有检测到人脸或分析失败的照片</summary><div id="group-unmatched"></div></details>
 </section>
 <dialog id="group-viewer"><button id="group-viewer-close" class="secondary">关闭预览</button><h2 id="group-viewer-title"></h2><div id="group-viewer-content"></div></dialog>
-</div></section></main></body></html>
+</div></section></div></main></body></html>

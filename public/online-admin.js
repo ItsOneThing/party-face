@@ -43,6 +43,7 @@ async function request(action,payload={}){
   if(!response.ok)throw new Error(data.error||'管理请求失败。');return data;
 }
 window.PARTY_ADMIN_TRANSPORT={
+  token,
   request:(path,payload)=>request(path.split('/').pop(),payload),
   ready:()=>!!session,
   canPublish:slug=>activities.get(slug)?.role==='owner',

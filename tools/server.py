@@ -68,6 +68,27 @@ def cloud(path, method='GET', body=None, extra=None, raw=False):
     result = request(base + path, method, payload, headers)
     return result if raw else (json.loads(result) if result else None)
 
+class LoginRequired(ValueError):
+    pass
+
+class ImportPermissionDenied(ValueError):
+    pass
+
+def import_identity(authorization):
+    # Auth verifies the signed access token on EVERY request. A decoded JWT is never trusted.
+    if not isinstance(authorization, str) or not re.fullmatch(r'Bearer [A-Za-z0-9_.-]{20,8192}', authorization):
+        raise LoginRequired('请先登录管理后台。')
+    try:
+        user = cloud('/auth/v1/user', extra={'Authorization': authorization})
+    except ValueError:
+        raise LoginRequired('登录验证失败，请重新登录或检查网络。') from None
+    if not isinstance(user, dict) or not user.get('id') or user.get('is_anonymous') or not user.get('email_confirmed_at'):
+        raise LoginRequired('请使用已确认邮箱的管理员账号。')
+    allowed = {item.strip() for item in os.environ.get('SUPABASE_IMPORT_ADMIN_IDS', '').split(',') if item.strip()}
+    if user['id'] not in allowed:
+        raise ImportPermissionDenied('该账号没有本机导入权限。请在本地 .env 的 SUPABASE_IMPORT_ADMIN_IDS 填写获授权账号的 UID，并重启服务。')
+    return user['id']
+
 def drive(params):
     params = dict(params, key=required('GOOGLE_DRIVE_API_KEY'))
     data = request('https://www.googleapis.com/drive/v3/files?' + urllib.parse.urlencode(params))
@@ -351,14 +372,25 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == '/api/session':
             if self.headers.get('Sec-Fetch-Site') not in (None, 'same-origin', 'none'):
                 return self.respond(403, {'error': 'Invalid origin'})
+            try:
+                import_identity(self.headers.get('Authorization'))
+            except LoginRequired as error:
+                return self.respond(401, {'error': str(error)})
+            except ImportPermissionDenied as error:
+                return self.respond(403, {'error': str(error)})
             return self.respond(200, {'session': SESSION, 'configured': all(os.environ.get(k) and 'YOUR_' not in os.environ[k] for k in ('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GOOGLE_DRIVE_API_KEY')), 'folder': DEFAULT_FOLDER})
         if url.path == '/api/image':
             if self.headers.get('X-Local-Session') != SESSION:
                 return self.respond(403, {'error': 'Invalid session'})
             try:
+                import_identity(self.headers.get('Authorization'))
                 file_id = urllib.parse.parse_qs(url.query).get('id', [''])[0]
                 full, _ = image_path(file_id); data = full.read_bytes()
                 self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data)
+            except LoginRequired as error:
+                self.respond(401, {'error': str(error)})
+            except ImportPermissionDenied as error:
+                self.respond(403, {'error': str(error)})
             except ValueError as error:
                 self.respond(400, {'error': str(error)})
             return
@@ -385,10 +417,15 @@ class Handler(SimpleHTTPRequestHandler):
                            '/api/groups/load': group_load, '/api/groups/save': group_save, '/api/groups/publish': group_publish}
                 if self.path not in actions:
                     return self.respond(404, {'error': 'Not found'})
+                import_identity(self.headers.get('Authorization'))
                 result = actions[self.path](payload)
             finally:
                 LOCK.release()
             self.respond(200, result)
+        except LoginRequired as error:
+            self.respond(401, {'error': str(error)})
+        except ImportPermissionDenied as error:
+            self.respond(403, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             # ValueError from our own validation is safe; JSON/PIL parsing is generic.
             import sys

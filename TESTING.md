@@ -78,3 +78,5 @@ Run `node tests/facenet_test.mjs` in addition to the tests above.
 - `node tests/admin_auth_test.mjs`: rejects secret/service keys in public configuration, clears the password field, gates owner controls, keeps tokens only in memory, shares concurrent refreshes, retains session on conflict and discards in-flight results after sign-out. Browser login-page preview has no console errors; missing public-key configuration disables login with an explicit setup message.
 
 - Unified admin hub: exact loopback origin only embeds import.html; the production page offers a link without making loopback requests. Tab switching preserves the importer iframe and keyboard navigation works. Browser preview confirms the local configuration is connected and the reviewer login panel appears on tab switch. Python public-build checks also exclude import.html.
+
+- Login-first gate: importer iframe is not loaded anonymously and is unloaded on signout. Local import APIs verify Auth identity and the local UID allowlist on every request, including photo downloads. Unit checks reject missing, unassigned, anonymous, unconfirmed and expired/invalid sessions.

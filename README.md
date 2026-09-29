@@ -126,3 +126,5 @@ cp .env.example .env
 partyface 自有源码与文档采用 [MIT License](LICENSE)。欢迎使用、修改与分发，并保留版权及许可证声明。
 
 **MIT 许可不授予活动照片、第三方品牌或私人数据的使用权。** 第三方依赖保留各自的许可证，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+本地 admin 也要求先登录。请在本机 `.env` 设置 `SUPABASE_IMPORT_ADMIN_IDS=获授权组织者账号UID` 并重启服务；该名单控制本机导入接口，分组账号仍按活动分配角色。详见在线后台指南。
