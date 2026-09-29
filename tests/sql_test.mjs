@@ -9,6 +9,7 @@ const vectorPath = process.argv[3] ? `${process.argv[3]}/dist/index.js` : `${pac
 const { vector } = await import(pathToFileURL(vectorPath));
 const db = new PGlite({ extensions: { vector } });
 await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+  create schema auth; create table auth.users(id uuid primary key);
   create schema storage;
   create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   grant usage on schema public to anon, authenticated, service_role;`);
@@ -117,5 +118,44 @@ await db.query('update events set active=true where id=$1',[newEvent]);
 await db.query(`select import_photo($1,'side','side','url','thumb','changed',$2,$3::jsonb)`,[newEvent,newModel,JSON.stringify([{descriptor:unit(1.2),box:{}}])]);
 await assert.rejects(()=>groupMatch(0),'reimport invalidates published grouping');
 await assert.rejects(()=>db.query('select publish_person_groups($1,$2)',[newEvent,revision]));
+// Online admin: per-event roles, whole-draft optimistic concurrency and publication checks.
+await db.exec(readFileSync(new URL('../supabase/migrations/006_online_admin.sql', import.meta.url),'utf8'));
+const owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',editor='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',outsider='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+for(const id of [owner,editor,outsider])await db.query('insert into auth.users values($1)',[id]);
+await db.query("insert into event_admins values($1,$2,'owner'),($1,$3,'editor')",[newEvent,owner,editor]);
+const admin=async(actor,action,slug='facenet-test',payload={consent:true})=>(await db.query('select admin_groups($1,$2,$3,$4::jsonb) result',[actor,action,slug,JSON.stringify(payload)])).rows[0].result;
+assert.equal((await admin(editor,'events')).length,1);
+assert.equal((await admin(outsider,'events')).length,0);
+await assert.rejects(()=>admin(outsider,'load'),e=>e.code==='42501');
+await assert.rejects(()=>admin(editor,'load','event-0'),e=>e.code==='42501');
+await assert.rejects(()=>admin(editor,'load','facenet-test',{consent:false}));
+const loaded=await admin(editor,'load');
+assert.equal(loaded.revision,null,'stale index does not restore old assignments');
+assert.equal(loaded.base_revision,draft,'latest pointer is retained as the concurrency baseline');
+assert.equal(typeof loaded.faces[0].id,'string');
+assert.equal(loaded.faces[0].descriptor.length,512);
+const onlineGroups=loaded.faces.map(f=>({name:'Reviewed',reviewed:true,faces:[f.id]}));
+const payload={consent:true,signature:loaded.signature,base_revision:loaded.base_revision,groups:onlineGroups};
+const saved=await admin(editor,'save','facenet-test',payload);
+await assert.rejects(()=>admin(owner,'save','facenet-test',payload),e=>e.code==='40001','second admin cannot overwrite');
+assert.equal((await admin(owner,'load')).revision,saved.revision);
+assert.equal((await db.query('select created_by from person_group_revisions where id=$1',[saved.revision])).rows[0].created_by,editor);
+await assert.rejects(()=>admin(editor,'publish','facenet-test',{consent:true,revision:saved.revision,base_published:loaded.published}),e=>e.code==='42501');
+const published=await admin(owner,'publish','facenet-test',{consent:true,revision:saved.revision,base_published:loaded.published});
+assert.equal(published.published,saved.revision);
+await assert.rejects(()=>admin(owner,'publish','facenet-test',{consent:true,revision:saved.revision,base_published:loaded.published}),e=>e.code==='40001');
+const next=await admin(editor,'save','facenet-test',{...payload,base_revision:saved.revision});
+await assert.rejects(()=>admin(owner,'publish','facenet-test',{consent:true,revision:saved.revision,base_published:saved.revision}),e=>e.code==='40001','owner cannot publish superseded draft');
+await db.query('delete from event_admins where user_id=$1',[editor]);
+await assert.rejects(()=>admin(editor,'load'),e=>e.code==='42501','revoked permissions are checked on every action');
+for(const role of ['anon','authenticated']){
+  await db.exec('set role '+role);
+  await assert.rejects(()=>db.query('select * from event_admins'));
+  await assert.rejects(()=>admin(owner,'events'));
+  await assert.rejects(()=>db.query('select save_person_groups_checked($1,$2::jsonb,$3,$4)',[newEvent,JSON.stringify(onlineGroups),loaded.signature,next.revision]));
+  await db.exec('reset role');
+}
+for(let i=0;i<30;i++) {try{await admin(outsider,'events');}catch(error){assert.equal(error.code,'P0429');}}
+await assert.rejects(()=>admin(outsider,'events'),e=>e.code==='P0429');
 await db.close();
 console.log('Postgres integration passed: all migrations, stricter matching cutoff, browse of unindexed photos, album/filename filters, full pagination, event isolation, rollback, visitor access denial, expiry and rate limits.');

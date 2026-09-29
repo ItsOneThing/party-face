@@ -4,7 +4,7 @@
 
 ## 一次性升级
 
-1. 先完成 FaceNet512 升级：在 Supabase SQL Editor 依次执行尚未运行的 004 和 `supabase/migrations/005_person_groups.sql`（已有 001–003 则不重复执行）。新项目依次运行 001–005。
+1. 先完成 FaceNet512 升级：在 Supabase SQL Editor 依次执行尚未运行的 004 和 `supabase/migrations/005_person_groups.sql`以及 `supabase/migrations/006_online_admin.sql`（已有迁移不重复执行）。新项目依次运行 001–006。
 2. 将 `supabase/functions/search-photos/index.ts` 的完整新版代码部署到原 `search-photos` Edge Function，继续使用已有 Secrets。005 必须先执行，新版函数会读取新增的分组版本字段。
 3. 发布升级分支的访客网站。当前代码在 GitHub 草稿 PR，不会自动部署 main；合并并完成 GitHub Pages 发布后才上线。组织者管理页、分组页不发布到 Pages。
 4. 重启本机 `tools/server.py`。密钥留在本机 `.env`，后端管理凭证不会进入访客网页。
@@ -34,3 +34,5 @@
 ## 当前验证状态
 
 本地数据库集成测试覆盖：正脸命中返回手动关联的侧脸照片、未核对组排除、相似候选拒绝、保存不发布、发布版本隔离、跨活动拒绝、权限、索引过期和模型维度。Edge 与本机管理接口使用模拟后端测试。真实云端迁移、部署和真实照片质量还需实际验证；本次代码修改没有自动操作旧活动数据。
+
+多人在线核对使用 `online-admin.html`，详见 [账号、权限与部署](ONLINE_ADMIN.zh-CN.md)。本地和在线工具都执行版本检查，遇到冲突请记录修改后重新读取。

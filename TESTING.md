@@ -67,3 +67,12 @@ Run `node tests/facenet_test.mjs` in addition to the tests above.
 - Edge mocked-backend test verifies published groups route to match_person_groups while ungrouped events retain match_photos.
 - 12 Python tests cover local event credential verification, consent/model checks, string face IDs beyond JavaScript precision, signature consistency and private-build boundaries.
 - Cloud migration and real deployment were not executed. Real photo group accuracy and end-user performance remain to be tested.
+
+## Online administrator collaboration
+
+- `node tests/admin_edge_test.mjs`: verifies the caller through Auth /user, ignores forged actor/role fields, rejects missing/invalid/anonymous/unconfirmed sessions, maps permission/conflict/rate errors, bounds body size, enforces CORS and signs private previews without exposing backend credentials.
+- SQL integration applies 001–006 against a synthetic auth.users table: event-scoped memberships, editor publication denial, outsider/cross-event denial, grant revocation, service-only RPC/table access, stale-index recovery, creator audit, two writers on the same baseline, publication baseline/latest-draft checks and per-account budget.
+- Public asset build includes the authenticated review page while still excluding the local importer, model lab, .env and local-data. Login sessions are kept in page memory.
+- Real Supabase credentials, account creation, production authentication and concurrent users were not exercised. No real photo reimport, migration execution or production deployment was performed in this change.
+
+- `node tests/admin_auth_test.mjs`: rejects secret/service keys in public configuration, clears the password field, gates owner controls, keeps tokens only in memory, shares concurrent refreshes, retains session on conflict and discards in-flight results after sign-out. Browser login-page preview has no console errors; missing public-key configuration disables login with an explicit setup message.

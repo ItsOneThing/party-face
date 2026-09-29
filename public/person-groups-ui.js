@@ -2,11 +2,14 @@ import {loadModels,detectFaces} from './facenet.js';
 import {imageFromBlob} from './recognition.js';
 import {addFace,mergeGroups,moveFace,photoIds,validateFace} from './person-groups.js';
 const $=id=>document.getElementById(id);
+const online=window.PARTY_ADMIN_TRANSPORT;
+let viewGeneration=0;
 let groups=[],photos=new Map(),busy=false,stop=false,selected=new Set(),demo=false;
 let localSession=null,cloudContext=null,dirty=false,canStop=false;
 function cloudStatus(text){$('group-cloud-status').textContent=text;}
 function changed(){if(cloudContext){dirty=true;cloudStatus('分组已修改，请保存新草稿后再发布。线上已发布版本不会随本页编辑改变。');}ready();}
 async function localApi(path,payload){
+  if(online)return online.request(path,payload);
   const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Local-Session':localSession},body:JSON.stringify(payload)});
   const body=await response.json();if(!response.ok)throw new Error(body.error||'管理请求失败，请检查 005 迁移和本地配置');return body;
 }
@@ -14,16 +17,18 @@ function node(tag,text='',className=''){const n=document.createElement(tag);n.te
 function button(text,action){const n=node('button',text,'secondary');n.type='button';n.addEventListener('click',action);return n;}
 function status(text){$('group-status').textContent=text;}
 function ready(){
+  if(online)online.setBusy(busy);
   $('group-start').disabled=busy||!$('group-consent').checked||!$('group-files').files.length;
   for(const id of ['group-consent','group-files','group-reset','group-demo','group-event'])$(id).disabled=busy;
   $('group-stop').disabled=!busy||stop||!canStop;
-  $('group-load').disabled=busy||!localSession||!$('group-consent').checked||!$('group-event').value.trim();
+  $('group-load').disabled=busy||!(online?online.ready():localSession)||!$('group-consent').checked||!$('group-event').value.trim();
   $('group-save').disabled=busy||!$('group-consent').checked||!cloudContext||!groups.length||(!dirty&&!!cloudContext.revision);
-  $('group-publish').disabled=busy||!$('group-consent').checked||!cloudContext?.revision||dirty||!groups.some(g=>g.reviewed);
+  $('group-publish').disabled=busy||!$('group-consent').checked||!cloudContext?.revision||dirty||!groups.some(g=>g.reviewed)||(online&&!online.canPublish(cloudContext?.slug));
   $('group-merge').disabled=busy||selected.size<2;
   for(const control of $('group-grid').querySelectorAll('input,button,select'))control.disabled=busy;
 }
 function release(){
+  viewGeneration++;
   if($('group-viewer').open)$('group-viewer').close();$('group-viewer-content').replaceChildren();
   for(const photo of photos.values())if(photo.url.startsWith('blob:'))URL.revokeObjectURL(photo.url);
   photos.clear();groups=[];selected.clear();demo=false;cloudContext=null;dirty=false;
@@ -83,7 +88,8 @@ $('group-load').addEventListener('click',async()=>{
   const slug=$('group-event').value.trim();busy=true;ready();cloudStatus('正在读取活动人脸索引与已保存分组…');
   try{
     const data=await localApi('/api/groups/load',{slug,consent:$('group-consent').checked});
-    release();$('group-log').textContent='';$('group-progress').hidden=true;
+    if(online&&!online.ready())throw new Error('已退出，请重新登录');
+    release();const generation=viewGeneration;$('group-log').textContent='';$('group-progress').hidden=true;
     for(const photo of data.photos)photos.set(photo.id,{...photo,faceCount:0});
     const records=new Map();
     for(const face of data.faces){validateFace(face);if(!photos.has(face.photoId))throw new Error('照片与索引不完整，请重新读取');records.set(face.id,face);photos.get(face.photoId).faceCount++;}
@@ -102,29 +108,32 @@ $('group-load').addEventListener('click',async()=>{
       }catch(error){photo.previewError=error.message;for(const face of records.values())if(face.photoId===photo.id)face.facePreview=demoImage('预览失败','#d8dec4');}
       finally{if(canvas)canvas.width=canvas.height=1;}
       await new Promise(resolve=>setTimeout(resolve,0));
+      if(generation!==viewGeneration)throw new Error('本页已清空，请重新读取');
     }
+    if(generation!==viewGeneration)throw new Error('本页已清空，请重新读取');
     if(data.groups.length)groups=data.groups.map(g=>({...g,faces:g.faces.map(id=>{if(!records.has(id))throw new Error('草稿已过期，请重新读取');return records.get(id);})}));
     else for(const face of records.values()){addFace(groups,face);await new Promise(resolve=>setTimeout(resolve,0));}
-    cloudContext={slug,signature:data.signature,revision:data.revision,published:data.published};dirty=!data.revision;
+    if(generation!==viewGeneration)throw new Error('本页已清空，请重新读取');
+    cloudContext={slug,signature:data.signature,revision:data.revision,published:data.published,baseRevision:data.base_revision??data.revision};dirty=!data.revision;
     cloudStatus(data.revision?'已恢复保存的草稿。'+(data.published===data.revision?'这个版本已发布。':'修改后需重新保存；发布草稿后才改变线上查询。'):'已生成新分组，请核对后保存草稿。');
     status('活动索引已读取。裁剪预览来自缩略图，对齐裁剪未保存在旧索引中。');
-  }catch(error){cloudStatus('读取失败：'+error.message+'。请确认已执行 005 迁移并重启本地服务。');}
+  }catch(error){cloudStatus('读取失败：'+error.message+'。请检查活动权限、006 迁移和管理服务。');}
   finally{busy=false;render();ready();}
 });
 $('group-save').addEventListener('click',async()=>{
   if(busy||$('group-save').disabled)return;busy=true;ready();cloudStatus('正在保存分组草稿…');
   try{
-    const result=await localApi('/api/groups/save',{slug:cloudContext.slug,consent:$('group-consent').checked,signature:cloudContext.signature,groups:groups.map(g=>({name:g.name||'',reviewed:g.reviewed,faces:g.faces.map(f=>f.id)}))});
-    cloudContext.revision=result.revision;dirty=false;cloudStatus('草稿已保存，可在重新读取活动后恢复。线上已发布版本未改变。');
+    const result=await localApi('/api/groups/save',{slug:cloudContext.slug,consent:$('group-consent').checked,signature:cloudContext.signature,base_revision:cloudContext.baseRevision,groups:groups.map(g=>({name:g.name||'',reviewed:g.reviewed,faces:g.faces.map(f=>f.id)}))});
+    cloudContext.revision=result.revision;cloudContext.baseRevision=result.revision;dirty=false;cloudStatus('草稿已保存，可在重新读取活动后恢复。线上已发布版本未改变。');
   }catch(error){cloudStatus('保存失败：'+error.message+'。请检查迁移、网络，或重新读取已变化的索引。');}
   finally{busy=false;ready();}
 });
 $('group-publish').addEventListener('click',async()=>{
   if(busy||$('group-publish').disabled)return;busy=true;ready();cloudStatus('正在发布已保存、已核对的分组…');
   try{
-    const result=await localApi('/api/groups/publish',{slug:cloudContext.slug,consent:$('group-consent').checked,revision:cloudContext.revision});cloudContext.published=result.published;
+    const result=await localApi('/api/groups/publish',{slug:cloudContext.slug,consent:$('group-consent').checked,revision:cloudContext.revision,base_published:cloudContext.published});cloudContext.published=result.published;
     cloudStatus('分组已发布。'+(result.active?'部署新版接口后，活动查询使用已核对小组。':'活动尚未开放，需在管理工具另行开放。')+'未核对组不会进入分组查询。');
-  }catch(error){cloudStatus('发布失败：'+error.message+'。请检查 005 迁移、网络和索引是否已变化。');}
+  }catch(error){cloudStatus('发布失败：'+error.message+'。请检查 006 迁移、权限、网络和索引是否已变化。');}
   finally{busy=false;ready();}
 });
 $('group-start').addEventListener('click',async()=>{
@@ -172,4 +181,7 @@ $('group-demo').addEventListener('click',()=>{
   status('纠错界面示例：可合并前两个 A 组，并把第三组里的 A 移到 A 组。这里都是示意图，没有运行真人识别。');render();
 });
 ready();
-fetch('/api/session').then(async response=>{if(!response.ok)throw new Error();const data=await response.json();if(data.configured){localSession=data.session;cloudStatus('本地服务已连接。须先执行 005 迁移，再读取新模型活动；本机需保留该活动访问码。');}else cloudStatus('请先配置本地 .env 和 Supabase；仍可使用纯本机实验。');ready();}).catch(()=>cloudStatus('本地管理服务未连接，仍可使用纯本机实验。'));
+if(online){
+  window.addEventListener('party-admin-signout',()=>{release();render();ready();cloudStatus('已退出，本页数据已清空。');});
+  window.addEventListener('party-admin-ready',ready);
+}else fetch('/api/session').then(async response=>{if(!response.ok)throw new Error();const data=await response.json();if(data.configured){localSession=data.session;cloudStatus('本地服务已连接。须先执行 006 迁移，再读取新模型活动；本机需保留该活动访问码。');}else cloudStatus('请先配置本地 .env 和 Supabase；仍可使用纯本机实验。');ready();}).catch(()=>cloudStatus('本地管理服务未连接，仍可使用纯本机实验。'));

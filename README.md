@@ -76,13 +76,13 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 和 [005](supabase/migrations/005_person_groups.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 、[005](supabase/migrations/005_person_groups.sql) 和 [006](supabase/migrations/006_online_admin.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
 5. 使用本机工具导入照片并开放活动。
 
-自动发布只包含允许的访客网页与模型文件；不发布管理页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
+自动发布包含允许的访客网页、登录后的在线分组核对页与模型文件；不发布本地导入页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
 
 系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。旧模型首次下载约 13 MB；新 FaceNet512 模型本体约 94 MB，另需运行时与检测模型。真实手机效果、首次加载时间和并发容量需要实测。
 
@@ -96,7 +96,13 @@ cp .env.example .env
 
 组织者可读取新的 FaceNet512 活动索引，检查人物组，合并或移出认错的人脸，保存私有草稿后发布。参加者仍只上传一张自拍，命中已核对组后返回该组关联的照片。未核对或模糊匹配不会直接返回人物组结果；已发布版本独立于未发布草稿。
 
-需要 005 迁移、新版 Edge Function 与访客网站发布。查看 [分组部署与使用指南](docs/PERSON_GROUPS.zh-CN.md)。本机照片实验不直接写入活动；真实分组质量仍需验证。
+需要 005–006 迁移、新版 Edge Function 与访客网站发布。查看 [分组部署与使用指南](docs/PERSON_GROUPS.zh-CN.md)。本机照片实验不直接写入活动；真实分组质量仍需验证。
+
+## 多人在线核对
+
+新增 `online-admin.html`：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入仍在组织者本机完成。
+
+需要部署新的 `admin-groups` Edge Function、运行 006 迁移、创建管理员账号并配置公开 Publishable key。查看 [在线后台配置与协作指南](docs/ONLINE_ADMIN.zh-CN.md)。这是共享草稿与版本检查，不是实时共同编辑；真实云端登录和协作需配置后验证。
 
 ## 隐私与访问
 

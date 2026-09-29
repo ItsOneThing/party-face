@@ -297,7 +297,7 @@ def group_load(payload):
         for group in saved_groups:
             group['faces'] = [str(m['face_id']) for m in members if m['group_id'] == group['id']]
     return {'event': event_id, 'slug': event['slug'], 'signature': signature, 'photos': output_photos, 'faces': output_faces,
-            'groups': saved_groups, 'revision': revision, 'published': event.get('published_group_revision')}
+            'groups': saved_groups, 'revision': revision, 'published': event.get('published_group_revision'), 'base_revision': event.get('latest_group_revision')}
 
 def group_save(payload):
     if payload.get('consent') is not True:
@@ -312,7 +312,7 @@ def group_save(payload):
     signature = payload.get('signature')
     if not isinstance(signature, str) or not re.fullmatch(r'[a-f0-9]{32}', signature):
         raise ValueError('请重新读取活动索引后再保存。')
-    return cloud('/rest/v1/rpc/save_person_groups', 'POST', {'p_event': event['id'], 'p_groups': groups, 'p_signature': signature})
+    return cloud('/rest/v1/rpc/save_person_groups_checked', 'POST', {'p_event': event['id'], 'p_groups': groups, 'p_signature': signature, 'p_base_revision': payload.get('base_revision')})
 
 def group_publish(payload):
     if payload.get('consent') is not True:
@@ -320,7 +320,7 @@ def group_publish(payload):
     event = group_event(payload); revision = payload.get('revision', '')
     if not isinstance(revision, str) or not re.fullmatch(r'[a-f0-9-]{36}', revision):
         raise ValueError('请先保存分组，再发布保存的版本。')
-    cloud('/rest/v1/rpc/publish_person_groups', 'POST', {'p_event': event['id'], 'p_revision': revision})
+    cloud('/rest/v1/rpc/publish_person_groups_checked', 'POST', {'p_event': event['id'], 'p_revision': revision, 'p_base_published': payload.get('base_published')})
     return {'published': revision, 'active': event['active']}
 
 class Handler(SimpleHTTPRequestHandler):
