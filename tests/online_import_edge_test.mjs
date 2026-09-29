@@ -15,7 +15,7 @@ function setup({auth=200,role='owner',drive=200,driveKey='PRIVATE_DRIVE_KEY',leg
   if(url.includes('googleapis.com')){
    if(drive!==200)return Response.json({error:'private upstream message'},{status:drive});
    if(url.includes('alt=media'))return new Response(new Uint8Array([255,216,255]),{headers:{'content-type':'image/jpeg'}});
-   if(url.includes('/files?'))return Response.json({files:[{id:'photo123456789',name:'Test.JPG',mimeType:'image/jpeg',md5Checksum:'md5',modifiedTime:'now',size:'100'}]});
+   if(url.includes('/files?'))return Response.json({files:[{id:'childfolder1234',name:'Child',mimeType:'application/vnd.google-apps.folder'},{id:'photo123456789',name:'Test.JPG',mimeType:'image/jpeg',md5Checksum:'md5',modifiedTime:'now',size:'100'}]});
    return Response.json({mimeType:'application/vnd.google-apps.folder',parents:[]});
   }throw new Error('unexpected request');
  };
@@ -58,3 +58,16 @@ r=await invoke(test,{action:'open',slug:'test-event',active:true});assert.equal(
 assert.equal((await invoke(setup({role:'editor'}),{action:'open',slug:'test-event',active:true})).status,403);
 assert.equal((await invoke(test,'x'.repeat(4*1024*1024+1))).status,413);
 console.log('Online importer Edge passed: verified auth/owner, creator allowlist, folder scope, signed tickets, model/consent/thumbnail validation, private keys, browse-only import, publishing and bounded bodies.');
+
+// Folder proofs are issued only from an authorized listing.
+const scopeTest=setup();const rootListing=await invoke(scopeTest,input);
+const child=rootListing.body.folders[0];
+assert.ok(child.ticket);
+const childInput={...input,parent:child.id,folder_ticket:child.ticket};
+assert.equal((await invoke(scopeTest,childInput)).status,200,'public child with absent parents can be listed using its signed proof');
+assert.equal((await invoke(scopeTest,{...childInput,parent:'outsidefolder123'})).status,403,'proof cannot be reused for a different folder');
+assert.equal((await invoke(scopeTest,{...childInput,folder_ticket:{...child.ticket,signature:'forged'}})).status,403);
+assert.equal((await invoke(scopeTest,{...childInput,folder_ticket:null})).status,403);
+assert.equal((await invoke(scopeTest,{action:'image',slug:'test-event',ticket:child.ticket})).status,400,'folder proof cannot be used as an image ticket');
+assert.equal(scopeTest.calls.some(c=>c.url.includes('parents,mimeType')),false,'no dependency on unavailable Drive parent metadata');
+console.log('Nested folders passed: signed child discovery, missing parents, outside-folder/forged proof rejection and image separation.');

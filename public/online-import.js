@@ -34,8 +34,8 @@ $('scan').addEventListener('click',async()=>{
    const folder=queue.shift();if(visited.has(folder.id))continue;visited.add(folder.id);if(visited.size>1000)throw new Error('子文件夹过多，请拆分活动。');
    let page=null;
    do{
-    const listing=await api('list',{slug,parent:folder.id,album:folder.album,page});
-    for(const f of listing.folders)queue.push({id:f.id,album:folder.album?folder.album+' / '+f.name:f.name});
+    const listing=await api('list',{slug,parent:folder.id,folder_ticket:folder.ticket,album:folder.album,page});
+    for(const f of listing.folders)queue.push({id:f.id,ticket:f.ticket,album:folder.album?folder.album+' / '+f.name:f.name});
     for(const photo of listing.photos)photos.set(photo.id,photo);
     for(const warning of listing.warnings)log(warning);
     if(photos.size>10000)throw new Error('照片过多，请拆分活动。');page=listing.page;

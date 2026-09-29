@@ -28,14 +28,16 @@ async function ticket(eventId:string,file:Record<string,unknown>,album:string){
 }
 async function verifyTicket(value:any,eventId:string){
  if(!value || typeof value.value!=='string' || value.value.length>8000 || typeof value.signature!=='string' || value.signature!==await hmac(value.value))throw new Failure(400,'照片凭据无效，请重新扫描。');
- const data=JSON.parse(value.value);if(data.event!==eventId || !Number.isFinite(data.expires) || data.expires<Date.now())throw new Failure(400,'扫描已过期，请重新扫描。');return data.file;
+ const data=JSON.parse(value.value);if(data.kind || !data.file || data.event!==eventId || !Number.isFinite(data.expires) || data.expires<Date.now())throw new Failure(400,'照片凭据无效或扫描已过期，请重新扫描。');return data.file;
 }
-async function descendant(id:string,root:string){
- const queue=[id],seen=new Set<string>();
- while(queue.length){const current=queue.shift()!;if(current===root)return true;if(seen.has(current))continue;seen.add(current);
-  if(seen.size>32)throw new Failure(400,'文件夹层级过深。');
-  const item=await (await drive('files/'+current,{fields:'id,parents,mimeType'})).json();queue.push(...(item.parents||[]));
- }return false;
+async function folderTicket(event:any,id:string){
+ const value=JSON.stringify({kind:'folder',event:event.id,root:event.drive_folder_id,id,expires:Date.now()+24*3600000});
+ return {value,signature:await hmac(value)};
+}
+async function allowedFolder(event:any,id:string,proof:any){
+ if(id===event.drive_folder_id)return true;
+ if(!proof||typeof proof.value!=='string'||proof.value.length>1000||typeof proof.signature!=='string'||proof.signature!==await hmac(proof.value))return false;
+ try{const data=JSON.parse(proof.value);return data.kind==='folder'&&data.event===event.id&&data.root===event.drive_folder_id&&data.id===id&&Number.isFinite(data.expires)&&data.expires>Date.now();}catch{return false;}
 }
 async function owned(slug:string,actor:string){
  const rows=await cloud('/rest/v1/events?slug=eq.'+slug+'&select=*');if(!rows.length)throw new Failure(404,'活动尚未创建。');const event=rows[0];
@@ -87,12 +89,14 @@ Deno.serve(async(req:Request)=>{
   }
   const event=await owned(input.slug,user.id);
   if(input.action==='list'){
-   if(typeof input.parent!=='string'||!/^[A-Za-z0-9_-]{10,100}$/.test(input.parent)||!await descendant(input.parent,event.drive_folder_id))throw new Failure(403,'不能扫描此活动以外的文件夹。');
+   // Public Drive reads can omit parents. Trust only children returned by a verified listing,
+   // with signed event/root-scoped credentials, rather than inferring ancestry from metadata.
+   if(typeof input.parent!=='string'||!/^[A-Za-z0-9_-]{10,100}$/.test(input.parent)||!await allowedFolder(event,input.parent,input.folder_ticket))throw new Failure(403,'文件夹扫描凭据无效或已过期，请重新扫描活动。');
    const album=String(input.album||'');if(album.length>1000||String(input.page||'').length>2000)throw new Failure(400,'相册参数无效。');
    const data=await(await drive('files',{q:"'"+input.parent+"' in parents and trashed = false",pageSize:'100',fields:'nextPageToken,files(id,name,mimeType,modifiedTime,md5Checksum,resourceKey,size)',orderBy:'name',...(input.page?{pageToken:input.page}:{})})).json();
    const folders=[],photos=[],warnings=[];
    for(const file of data.files||[]){
-    if(file.mimeType==='application/vnd.google-apps.folder')folders.push({id:file.id,name:file.name});
+    if(file.mimeType==='application/vnd.google-apps.folder')folders.push({id:file.id,name:file.name,ticket:await folderTicket(event,file.id)});
     else if(['image/jpeg','image/png','image/webp'].includes(file.mimeType)){
      if(Number(file.size||0)>25*1024*1024)warnings.push(file.name+' 超过在线导入 25 MB 上限，请缩小后重试。');else photos.push(await ticket(event.id,file,album));
     }else warnings.push(file.name+' 不是支持的图片格式，已跳过。');

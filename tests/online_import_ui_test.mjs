@@ -8,7 +8,8 @@ const fetch=async(url,options)=>{
  const body=JSON.parse(options.body);requests.push(body);
  if(body.action==='config')return Response.json({configured});
  if(body.action==='prepare')return Response.json({root:'root',active:false,checkpoints:[checkpoint]});
- if(body.action==='list')return Response.json({folders:[],photos:[{id:'done',name:'Done',fingerprint:'same',ticket:{}},{id:'retry',name:'Retry',fingerprint:'new',ticket:{}}],warnings:[],page:null});
+ if(body.action==='list'&&body.parent==='childfolder'){assert.deepEqual(body.folder_ticket,{value:'signed-child',signature:'proof'});return Response.json({folders:[{id:'childfolder',name:'Child',ticket:{value:'signed-child',signature:'proof'}}],photos:[],warnings:[],page:null});}
+ if(body.action==='list')return Response.json({folders:[{id:'childfolder',name:'Child',ticket:{value:'signed-child',signature:'proof'}}],photos:[{id:'done',name:'Done',fingerprint:'same',ticket:{}},{id:'retry',name:'Retry',fingerprint:'new',ticket:{}}],warnings:[],page:null});
  if(body.action==='image')return failImage?Response.json({error:'Drive permission failure'},{status:403}):new Response(new Blob(['image']));
  if(body.action==='save')return Response.json({faces:0});
  if(body.action==='open')return Response.json({active:body.active,key:'new-key'});
