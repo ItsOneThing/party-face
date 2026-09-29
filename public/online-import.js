@@ -65,7 +65,7 @@ $('import').addEventListener('click',async()=>{
   if(recognize)try{await loadModels(log);}catch(error){recognize=false;log('模型加载失败：'+error.message+'。先导入浏览照片，之后可补建索引。');}
   for(;index<pending.length;index++){
    if(stop)break;const photo=pending[index];let canvas,url;
-   log(`[${index+1}/${pending.length}] ${photo.name}`);
+   log(`[${index+1}/${pending.length}] ${photo.name}${photo.preview?' · 大图使用 Drive 预览，原图保留':''}`);
    try{
     const blob=await api('image',{slug,ticket:photo.ticket},true);canvas=await imageFromBlob(blob,2400);url=URL.createObjectURL(blob);$('import-preview').src=url;$('import-preview').hidden=false;
     let faces=[],indexed=false;

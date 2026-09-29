@@ -23,7 +23,7 @@ async function hmac(value:string){const key=await crypto.subtle.importKey('raw',
 async function ticket(eventId:string,file:Record<string,unknown>,album:string){
  const metadata={id:file.id,name:file.name,modifiedTime:file.modifiedTime,md5Checksum:file.md5Checksum,resourceKey:file.resourceKey,album_path:album};
  const fingerprint=await hex(enc.encode(JSON.stringify(metadata)));
- const value=JSON.stringify({event:eventId,expires:Date.now()+24*3600000,file:{...metadata,fingerprint}});
+ const value=JSON.stringify({event:eventId,expires:Date.now()+24*3600000,file:{...metadata,fingerprint,size:Number(file.size||0)}});
  return {id:file.id,name:file.name,fingerprint,ticket:{value,signature:await hmac(value)}};
 }
 async function verifyTicket(value:any,eventId:string){
@@ -98,7 +98,7 @@ Deno.serve(async(req:Request)=>{
    for(const file of data.files||[]){
     if(file.mimeType==='application/vnd.google-apps.folder')folders.push({id:file.id,name:file.name,ticket:await folderTicket(event,file.id)});
     else if(['image/jpeg','image/png','image/webp'].includes(file.mimeType)){
-     if(Number(file.size||0)>25*1024*1024)warnings.push(file.name+' 超过在线导入 25 MB 上限，请缩小后重试。');else photos.push(await ticket(event.id,file,album));
+     photos.push({...await ticket(event.id,file,album),preview:Number(file.size||0)>25*1024*1024});
     }else warnings.push(file.name+' 不是支持的图片格式，已跳过。');
    }return reply(200,{folders,photos,warnings,page:data.nextPageToken||null});
   }
@@ -112,8 +112,18 @@ Deno.serve(async(req:Request)=>{
   }
   const file=await verifyTicket(input.ticket,event.id);
   if(input.action==='image'){
-   const res=await drive('files/'+file.id,{alt:'media'},file.resourceKey);const reader=res.body!.getReader(),chunks=[];let size=0;
-   while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new Failure(413,'图片超过在线导入 25 MB 上限。');}chunks.push(value);}
+   let res;
+   if(file.size>25*1024*1024){
+    // Fetch short-lived preview metadata at import time, never accept a browser-supplied URL.
+    const metadata=await(await drive('files/'+file.id,{fields:'thumbnailLink'},file.resourceKey)).json();
+    let preview;try{preview=new URL(metadata.thumbnailLink);}catch{throw new Failure(400,'此大图暂时没有 Drive 预览图，请稍后重新扫描重试。');}
+    if(preview.protocol!=='https:'||!preview.hostname.endsWith('.googleusercontent.com')||preview.username||preview.password)throw new Failure(400,'Drive 预览地址无效。');
+    preview.href=preview.href.replace(/=s\d+(?:-[a-z]+)?$/, '=s2400');
+    res=await fetch(preview,{redirect:'error'});
+    if(!res.ok||!res.headers.get('content-type')?.startsWith('image/'))throw new Failure(400,'Drive 大图预览读取失败，请稍后重试。');
+   }else res=await drive('files/'+file.id,{alt:'media'},file.resourceKey);
+   const reader=res.body!.getReader(),chunks=[];let size=0;
+   while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new Failure(413,'处理用图片仍超过 25 MB，请稍后重试或使用本地导入。');}chunks.push(value);}
    return new Response(new Blob(chunks),{headers:{...cors,'Content-Type':res.headers.get('content-type')||'image/jpeg'}});
   }
   if(input.action==='save'){

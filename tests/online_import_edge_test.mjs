@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';import vm from 'node:vm';import assert from 'node:assert/strict';import {webcrypto} from 'node:crypto';
 const code=stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/admin-import/index.ts',import.meta.url),'utf8'),{mode:'transform'});
 const actor='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',model='facenet512-onnx-ssd68-align5-prewhiten-l2-v1';
-function setup({auth=200,role='owner',drive=200,driveKey='PRIVATE_DRIVE_KEY',legacy=false,exists=true,creator=false}={}){
+function setup({auth=200,role='owner',drive=200,driveKey='PRIVATE_DRIVE_KEY',legacy=false,exists=true,creator=false,large=false,previewUrl='https://lh3.googleusercontent.com/preview=s220'}={}){
  let handler;const calls=[];const event={id:'event-id',drive_folder_id:'folder123456789',model_version:legacy?'legacy':model,active:false};
  const fetch=async(url,options={})=>{
   url=String(url);
@@ -12,10 +12,12 @@ function setup({auth=200,role='owner',drive=200,driveKey='PRIVATE_DRIVE_KEY',leg
   if(url.endsWith('/rest/v1/events'))return Response.json([event]);
   if(url.includes('/rest/v1/photos?'))return Response.json(url.includes('limit=1')&&!url.includes('limit=1000')?[{id:'saved'}]:[]);
   if(url.includes('/rpc/import_photo')||url.includes('/storage/v1/object/'))return Response.json([]);
+  if(url.includes('googleusercontent.com'))return new Response(new Uint8Array([255,216,255]),{headers:{'content-type':'image/jpeg'}});
   if(url.includes('googleapis.com')){
    if(drive!==200)return Response.json({error:'private upstream message'},{status:drive});
    if(url.includes('alt=media'))return new Response(new Uint8Array([255,216,255]),{headers:{'content-type':'image/jpeg'}});
-   if(url.includes('/files?'))return Response.json({files:[{id:'childfolder1234',name:'Child',mimeType:'application/vnd.google-apps.folder'},{id:'photo123456789',name:'Test.JPG',mimeType:'image/jpeg',md5Checksum:'md5',modifiedTime:'now',size:'100'}]});
+   if(url.includes('/files?'))return Response.json({files:[{id:'childfolder1234',name:'Child',mimeType:'application/vnd.google-apps.folder'},{id:'photo123456789',name:'Test.JPG',mimeType:'image/jpeg',md5Checksum:'md5',modifiedTime:'now',size:large?String(40*1024*1024):'100'}]});
+   if(url.includes('thumbnailLink'))return Response.json({thumbnailLink:previewUrl});
    return Response.json({mimeType:'application/vnd.google-apps.folder',parents:[]});
   }throw new Error('unexpected request');
  };
@@ -71,3 +73,18 @@ assert.equal((await invoke(scopeTest,{...childInput,folder_ticket:null})).status
 assert.equal((await invoke(scopeTest,{action:'image',slug:'test-event',ticket:child.ticket})).status,400,'folder proof cannot be used as an image ticket');
 assert.equal(scopeTest.calls.some(c=>c.url.includes('parents,mimeType')),false,'no dependency on unavailable Drive parent metadata');
 console.log('Nested folders passed: signed child discovery, missing parents, outside-folder/forged proof rejection and image separation.');
+
+const largeTest=setup({large:true});const largeListing=await invoke(largeTest,input);
+assert.equal(largeListing.body.photos.length,1,'large originals remain in scan');
+assert.equal(largeListing.body.photos[0].preview,true);
+assert.equal(largeListing.body.warnings.length,0);
+const largePhoto=largeListing.body.photos[0];
+assert.equal((await invoke(largeTest,{action:'image',slug:'test-event',ticket:largePhoto.ticket})).status,200);
+assert.ok(largeTest.calls.some(c=>c.url==='https://lh3.googleusercontent.com/preview=s2400'&&c.options.redirect==='error'));
+assert.equal(largeTest.calls.some(c=>c.url.includes('alt=media')),false,'large original is not buffered');
+for(const previewUrl of ['', 'http://lh3.googleusercontent.com/preview=s220', 'https://evil.invalid/preview', 'https://googleusercontent.com.evil.invalid/a']){
+ const t=setup({large:true,previewUrl});const listing=await invoke(t,input);
+ assert.equal((await invoke(t,{action:'image',slug:'test-event',ticket:listing.body.photos[0].ticket})).status,400);
+ assert.equal(t.calls.some(c=>c.url.startsWith('http://')||c.url.includes('evil.invalid')),false);
+}
+console.log('Large image import passed: included in scan, fresh Google preview, 2400px request, bounded buffering, no original download and untrusted URL rejection.');
