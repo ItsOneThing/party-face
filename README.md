@@ -76,7 +76,7 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 和 [004](supabase/migrations/004_facenet512.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 和 [005](supabase/migrations/005_person_groups.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
@@ -91,6 +91,12 @@ cp .env.example .env
 新的本机导入工具使用 FaceNet512，访客页面按活动记录选择模型。旧活动仍使用原来的 128 维模型；512 维特征与旧特征不能混用，旧索引不能自动转换。
 
 先在 [纯本地测试页](http://127.0.0.1:8765/model-lab.html) 测试已取得明确同意的照片。模型与浏览器运行时已集成；更高维度本身不证明准确率提升，阈值 0.75 只是待校准的起点。详细流程见 [模型升级指南](docs/FACENET512.zh-CN.md)。
+
+## 人物分组查询（实验）
+
+组织者可读取新的 FaceNet512 活动索引，检查人物组，合并或移出认错的人脸，保存私有草稿后发布。参加者仍只上传一张自拍，命中已核对组后返回该组关联的照片。未核对或模糊匹配不会直接返回人物组结果；已发布版本独立于未发布草稿。
+
+需要 005 迁移、新版 Edge Function 与访客网站发布。查看 [分组部署与使用指南](docs/PERSON_GROUPS.zh-CN.md)。本机照片实验不直接写入活动；真实分组质量仍需验证。
 
 ## 隐私与访问
 

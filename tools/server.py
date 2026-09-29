@@ -244,6 +244,85 @@ def publish(payload):
     cloud('/rest/v1/events?id=eq.' + CURRENT['id'], 'PATCH', {'active': active})
     return {'active': active, 'link': base.rstrip('/') + '/?event=' + CURRENT['slug'] + '#key=' + CURRENT['key']}
 
+def group_event(payload):
+    slug = payload.get('slug', '')
+    if not isinstance(slug, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,63}', slug):
+        raise ValueError('请填写有效的活动编号。')
+    saved = local_settings().get(slug)
+    if not saved or not saved.get('key'):
+        raise ValueError('本机没有这个活动的访问码，请恢复 local-data 备份。')
+    events = cloud('/rest/v1/events?slug=eq.' + slug + '&select=*')
+    if not events or events[0]['id'] != saved['id'] or events[0]['token_hash'] != hashlib.sha256(saved['key'].encode()).hexdigest():
+        raise ValueError('活动与本机访问码不一致。')
+    if events[0]['model_version'] != FACENET_MODEL:
+        raise ValueError('人物分组仅用于新的 FaceNet512 活动，不能混用旧模型特征。')
+    return events[0]
+
+def group_load(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload); event_id = event['id']
+    signature = cloud('/rest/v1/rpc/person_index_signature', 'POST', {'p_event': event_id})
+    photos = cloud('/rest/v1/photos?event_id=eq.' + event_id + '&select=id,name,drive_url,thumbnail_path&order=id&limit=501')
+    if len(photos) > 500:
+        raise ValueError('当前分组工具最多处理 500 张照片，请使用较小的测试活动。')
+    faces = []; offset = 0
+    while True:
+        rows = cloud('/rest/v1/faces?event_id=eq.' + event_id + '&select=id,photo_id,embedding,box&order=id&limit=1000&offset=' + str(offset))
+        faces.extend(rows)
+        if len(faces) > 2000:
+            raise ValueError('当前分组工具最多处理 2000 张人脸，请使用较小的测试活动。')
+        if len(rows) < 1000: break
+        offset += len(rows)
+    if not faces:
+        raise ValueError('这个活动还没有人脸索引，请先完成 FaceNet512 导入。')
+    if signature != cloud('/rest/v1/rpc/person_index_signature', 'POST', {'p_event': event_id}):
+        raise ValueError('导入索引正在变化，请完成导入后再读取。')
+    signed = cloud('/storage/v1/object/sign/event-thumbnails', 'POST', {'paths': [p['thumbnail_path'] for p in photos], 'expiresIn': 3600})
+    urls = {s['path']: required('SUPABASE_URL').rstrip('/') + '/storage/v1' + s['signedURL'] for s in signed if s.get('signedURL')}
+    output_photos = [{'id': p['id'], 'name': p['name'], 'url': urls.get(p['thumbnail_path'], ''), 'drive_url': p['drive_url']} for p in photos]
+    output_faces = [{'id': str(f['id']), 'photoId': f['photo_id'], 'descriptor': json.loads(f['embedding']) if isinstance(f['embedding'], str) else f['embedding'], 'box': f['box']} for f in faces]
+    revisions = cloud('/rest/v1/person_group_revisions?event_id=eq.' + event_id + '&index_signature=eq.' + signature + '&select=id&order=created_at.desc,id.desc&limit=1')
+    saved_groups = []; revision = revisions[0]['id'] if revisions else None
+    if revision:
+        offset = 0
+        while True:
+            rows = cloud('/rest/v1/person_groups?revision_id=eq.' + revision + '&select=id,name,reviewed&order=id&limit=1000&offset=' + str(offset))
+            saved_groups.extend(rows)
+            if len(rows) < 1000: break
+            offset += len(rows)
+        members = cloud('/rest/v1/person_group_faces?revision_id=eq.' + revision + '&select=group_id,face_id&order=face_id&limit=1000')
+        if len(members) == 1000:
+            members += cloud('/rest/v1/person_group_faces?revision_id=eq.' + revision + '&select=group_id,face_id&order=face_id&limit=1000&offset=1000')
+        for group in saved_groups:
+            group['faces'] = [str(m['face_id']) for m in members if m['group_id'] == group['id']]
+    return {'event': event_id, 'slug': event['slug'], 'signature': signature, 'photos': output_photos, 'faces': output_faces,
+            'groups': saved_groups, 'revision': revision, 'published': event.get('published_group_revision')}
+
+def group_save(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload)
+    groups = payload.get('groups')
+    if not isinstance(groups, list) or not 1 <= len(groups) <= 2000:
+        raise ValueError('分组数据无效。')
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get('name', ''), str) or len(group.get('name', '')) > 60 or not isinstance(group.get('reviewed'), bool) or not isinstance(group.get('faces'), list):
+            raise ValueError('分组数据无效。')
+    signature = payload.get('signature')
+    if not isinstance(signature, str) or not re.fullmatch(r'[a-f0-9]{32}', signature):
+        raise ValueError('请重新读取活动索引后再保存。')
+    return cloud('/rest/v1/rpc/save_person_groups', 'POST', {'p_event': event['id'], 'p_groups': groups, 'p_signature': signature})
+
+def group_publish(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload); revision = payload.get('revision', '')
+    if not isinstance(revision, str) or not re.fullmatch(r'[a-f0-9-]{36}', revision):
+        raise ValueError('请先保存分组，再发布保存的版本。')
+    cloud('/rest/v1/rpc/publish_person_groups', 'POST', {'p_event': event['id'], 'p_revision': revision})
+    return {'published': revision, 'active': event['active']}
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PUBLIC), **kwargs)
@@ -302,7 +381,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not LOCK.acquire(blocking=False):
                 return self.respond(409, {'error': '另一个导入任务正在运行，请稍后重试。'})
             try:
-                actions = {'/api/scan': make_event, '/api/save': save_photo, '/api/publish': publish}
+                actions = {'/api/scan': make_event, '/api/save': save_photo, '/api/publish': publish,
+                           '/api/groups/load': group_load, '/api/groups/save': group_save, '/api/groups/publish': group_publish}
                 if self.path not in actions:
                     return self.respond(404, {'error': 'Not found'})
                 result = actions[self.path](payload)

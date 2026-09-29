@@ -8,18 +8,18 @@ const source = stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/
 const eventId = '11111111-1111-4111-8111-111111111111';
 const model = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1';
 const valid = { action: 'search', event: 'test-event', key: 'k'.repeat(43), model, descriptor: Array(128).fill(.1), offset: 0 };
-function createHandler({ limited = false, active = true, configured = true, recognitionModel = model } = {}) {
+function createHandler({ limited = false, active = true, configured = true, recognitionModel = model, grouped = false } = {}) {
   let handler;
   const calls = [];
   const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'server-key', RATE_LIMIT_SALT: configured ? 'salt' : '', ALLOWED_ORIGINS: 'https://example.github.io' };
   const fakeFetch = async (url, options = {}) => {
     calls.push({ url, options });
-    if (url.includes('/events?')) return Response.json(active ? [{ id: eventId, title: '活动', title_it: 'Festa', model_version: recognitionModel, drive_folder_id: 'drivefolder12345' }] : []);
+    if (url.includes('/events?')) return Response.json(active ? [{ id: eventId, title: '活动', title_it: 'Festa', model_version: recognitionModel, published_group_revision: grouped ? 'revision' : null, drive_folder_id: 'drivefolder12345' }] : []);
     if (url.includes('/consume_budget')) return Response.json(!limited);
     if (url.includes('/photos?')) return new Response('[]', { headers: { 'content-range': '0-0/37' } });
     if (url.includes('/gallery_summary')) return Response.json({ photo_count: 37, indexed_photo_count: 33, albums: [{ path: '活动', count: 37 }] });
     if (url.includes('/browse_photos')) return Response.json({ total: 37, photos: [{ id: 'photo', name: 'A.jpg', album_path: '活动', thumbnail_path: `${eventId}/photo.jpg`, drive_url: 'https://drive.google.com/file/d/photo/view' }] });
-    if (url.includes('/match_photos')) return Response.json({ total: 37, photos: [{ id: 'photo', name: 'A.jpg', thumbnail_path: `${eventId}/photo.jpg`, drive_url: 'https://drive.google.com/file/d/photo/view' }] });
+    if (url.includes('/match_photos') || url.includes('/match_person_groups')) return Response.json({ total: 37, photos: [{ id: 'photo', name: 'A.jpg', thumbnail_path: `${eventId}/photo.jpg`, drive_url: 'https://drive.google.com/file/d/photo/view' }] });
     if (url.includes('/object/sign/')) return Response.json([{ path: `${eventId}/photo.jpg`, signedURL: '/object/sign/event-thumbnails/photo.jpg?token=temporary' }]);
     throw new Error('Unexpected backend call');
   };
@@ -66,3 +66,8 @@ assert.equal((await invoke(createHandler(), valid, { headers: { Origin: 'https:/
 assert.equal((await invoke(createHandler(), '{invalid')).response.status, 400);
 assert.equal((await invoke(createHandler(), 'x'.repeat(17000))).response.status, 413);
 console.log('Edge Function checks passed: search + browse validation, activity access, rate limits, album filters and signed results (mock backend).');
+
+const grouped=createHandler({recognitionModel:facenetModel,grouped:true});
+assert.equal((await invoke(grouped,{...valid,model:facenetModel,descriptor:facenetVector})).response.status,200);
+assert.equal(grouped.calls.some(c=>c.url.includes('/match_person_groups')),true);
+assert.equal(grouped.calls.some(c=>c.url.includes('/match_photos')),false);

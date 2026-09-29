@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
       !/^[a-z0-9][a-z0-9-]{1,63}$/.test(input.event) || typeof input.key !== "string" || !/^[A-Za-z0-9_-]{32,100}$/.test(input.key))
       return reply(400, { error: "活动链接不完整或无效。" });
     const tokenHash = await hash(input.key);
-    const events = await backend(`/rest/v1/events?slug=eq.${encodeURIComponent(input.event)}&token_hash=eq.${tokenHash}&active=eq.true&select=id,title,title_it,expires_at,model_version,drive_folder_id`);
+    const events = await backend(`/rest/v1/events?slug=eq.${encodeURIComponent(input.event)}&token_hash=eq.${tokenHash}&active=eq.true&select=id,title,title_it,expires_at,model_version,drive_folder_id,published_group_revision`);
     const event = events[0];
     if (!event || (event.expires_at && new Date(event.expires_at) <= new Date())) return reply(404, { error: "活动不存在、尚未开放或已关闭。请联系组织者。" });
     if (input.action === "search") {
@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
     }
     const result = input.action === "browse"
       ? await backend("/rest/v1/rpc/browse_photos", { p_event: event.id, p_album: input.album, p_query: input.query.trim(), p_offset: input.offset })
-      : await backend("/rest/v1/rpc/match_photos", { p_event: event.id, p_descriptor: JSON.stringify(input.descriptor), p_offset: input.offset });
+      : await backend(event.published_group_revision ? "/rest/v1/rpc/match_person_groups" : "/rest/v1/rpc/match_photos", { p_event: event.id, p_descriptor: JSON.stringify(input.descriptor), p_offset: input.offset });
     if (result.photos.length) {
       const signed = await backend("/storage/v1/object/sign/event-thumbnails", { paths: result.photos.map((p: { thumbnail_path: string }) => p.thumbnail_path), expiresIn: 3600 });
       const urls = new Map(signed.map((s: { path: string; signedURL?: string }) => [s.path, s.signedURL ? `${BASE}/storage/v1${s.signedURL}` : null]));

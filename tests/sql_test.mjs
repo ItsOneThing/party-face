@@ -16,6 +16,7 @@ await db.exec(readFileSync(new URL('../supabase/migrations/001_party_face.sql', 
 await db.exec(readFileSync(new URL('../supabase/migrations/002_gallery.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../supabase/migrations/003_stricter_matching.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../supabase/migrations/004_facenet512.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../supabase/migrations/005_person_groups.sql', import.meta.url), 'utf8'));
 const model = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1';
 const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 for (let i = 0; i < 2; i++) await db.query(`insert into events(id,slug,title,token_hash,drive_folder_id,model_version,active) values($1,$2,'Event',$3,'folder',$4,true)`, [ids[i], `event-${i}`, 'a'.repeat(64), model]);
@@ -82,5 +83,39 @@ for (let i = 0; i < 300; i++) assert.equal((await db.query(`select consume_budge
 assert.equal((await db.query(`select consume_budget($1,$2,'search') as permit`, [ids[0], client])).rows[0].permit, false);
 assert.equal((await db.query(`select consume_budget($1,$2,'browse') as permit`, [ids[0], 'c'.repeat(64)])).rows[0].permit, true);
 assert.equal((await db.query(`select public from storage.buckets where id='event-thumbnails'`)).rows[0].public, false);
+// A reviewed group expands a front-face match to its manually linked side-face photo.
+const unit=angle=>[Math.cos(angle),Math.sin(angle),...Array(510).fill(0)];
+for(const [name,angle] of [['side',1.2],['other-person',2],['pending-person',-.8]])
+  await db.query(`select import_photo($1,$2,$2,'url','thumb','fp',$3,$4::jsonb)`,[newEvent,name,newModel,JSON.stringify([{descriptor:unit(angle),box:{}}])]);
+const imported=(await db.query(`select f.id::text id,p.drive_file_id file from faces f join photos p on p.id=f.photo_id where f.event_id=$1`,[newEvent])).rows;
+const byFile=file=>imported.find(f=>f.file===file).id;
+const signature=(await db.query('select person_index_signature($1) signature',[newEvent])).rows[0].signature;
+const reviewed=[{name:'A',reviewed:true,faces:[byFile('new-face'),byFile('side')]},{name:'B',reviewed:true,faces:[byFile('other-person')]},{name:'pending',reviewed:false,faces:[byFile('pending-person')]}];
+const saveGroups=async groups=>(await db.query('select save_person_groups($1,$2::jsonb,$3) result',[newEvent,JSON.stringify(groups),signature])).rows[0].result.revision;
+const groupMatch=async angle=>(await db.query('select match_person_groups($1,$2::extensions.vector) result',[newEvent,JSON.stringify(unit(angle))])).rows[0].result;
+const revision=await saveGroups(reviewed);
+assert.equal((await db.query('select published_group_revision from events where id=$1',[newEvent])).rows[0].published_group_revision,null,'saving a draft does not publish');
+await db.query('select publish_person_groups($1,$2)',[newEvent,revision]);
+assert.equal((await groupMatch(0)).total,2,'front match returns linked side photo too');
+assert.equal((await groupMatch(2)).total,1);
+assert.equal((await groupMatch(-.8)).total,0,'unreviewed group never returns photos');
+assert.equal((await groupMatch(1.6)).total,0,'similar scores for different groups are ambiguous');
+const draft=await saveGroups(reviewed.map(g=>({...g,reviewed:false})));
+await assert.rejects(()=>db.query('select publish_person_groups($1,$2)',[newEvent,draft]));
+assert.equal((await groupMatch(0)).total,2,'unpublished editing does not change live snapshot');
+await assert.rejects(()=>saveGroups(reviewed.slice(0,1)),'all indexed faces must be assigned');
+const foreign=(await db.query('select id::text id from faces where event_id=$1 limit 1',[ids[1]])).rows[0].id;
+await assert.rejects(()=>saveGroups([...reviewed,{name:'foreign',reviewed:true,faces:[foreign]}]));
+await assert.rejects(()=>db.query('select publish_person_groups($1,$2)',[ids[0],revision]));
+await assert.rejects(()=>db.query('select match_person_groups($1,$2::extensions.vector)',[newEvent,JSON.stringify(descriptor)]));
+await db.exec('set role anon');
+await assert.rejects(()=>db.query('select * from person_groups'));
+await assert.rejects(()=>groupMatch(0));
+await db.exec('reset role');
+await db.query('update events set active=false where id=$1',[newEvent]);assert.equal((await groupMatch(0)).total,0);
+await db.query('update events set active=true where id=$1',[newEvent]);
+await db.query(`select import_photo($1,'side','side','url','thumb','changed',$2,$3::jsonb)`,[newEvent,newModel,JSON.stringify([{descriptor:unit(1.2),box:{}}])]);
+await assert.rejects(()=>groupMatch(0),'reimport invalidates published grouping');
+await assert.rejects(()=>db.query('select publish_person_groups($1,$2)',[newEvent,revision]));
 await db.close();
 console.log('Postgres integration passed: all migrations, stricter matching cutoff, browse of unindexed photos, album/filename filters, full pagination, event isolation, rollback, visitor access denial, expiry and rate limits.');

@@ -101,6 +101,36 @@ class ImporterTests(unittest.TestCase):
             self.assertEqual(server.make_event(dict(payload, recognize=False))['skipped'], 1)
             self.assertEqual(server.make_event(dict(payload, recognize=True))['pending'], [{'id': 'p1', 'name': 'A.jpg'}])
 
+    def test_group_access_rejects_missing_consent_or_legacy_models(self):
+        with self.assertRaises(ValueError):
+            server.group_load({'slug': 'test-event'})
+        key = 'K' * 43
+        event = {'id': 'id', 'token_hash': hashlib.sha256(key.encode()).hexdigest(), 'model_version': server.MODEL}
+        with patch.object(server, 'local_settings', return_value={'test-event': {'id': 'id', 'key': key}}), patch.object(server, 'cloud', return_value=[event]):
+            with self.assertRaises(ValueError):
+                server.group_event({'slug': 'test-event'})
+            event['model_version'] = server.FACENET_MODEL
+            self.assertEqual(server.group_event({'slug': 'test-event'})['id'], 'id')
+            event['token_hash'] = 'wrong'
+            with self.assertRaises(ValueError):
+                server.group_event({'slug': 'test-event'})
+
+    def test_group_loading_returns_string_face_ids_and_matching_signature(self):
+        face = {'id': 9007199254740993, 'photo_id': 'photo', 'embedding': json.dumps([1] + [0] * 511), 'box': {'x': 0, 'y': 0, 'width': 1, 'height': 1}}
+        def cloud(path, *args, **kwargs):
+            if 'person_index_signature' in path: return 'a' * 32
+            if '/photos?' in path: return [{'id': 'photo', 'name': 'A.jpg', 'drive_url': 'url', 'thumbnail_path': 'thumb'}]
+            if '/faces?' in path: return [face]
+            if '/object/sign/' in path: return [{'path': 'thumb', 'signedURL': '/object/sign/temp'}]
+            if '/person_group_revisions?' in path: return []
+            raise AssertionError(path)
+        with patch.object(server, 'group_event', return_value={'id': 'event', 'slug': 'test-event'}), patch.object(server, 'cloud', side_effect=cloud), patch.dict(server.os.environ, {'SUPABASE_URL': 'https://test.supabase.co'}):
+            result = server.group_load({'slug': 'test-event', 'consent': True})
+        self.assertEqual(result['faces'][0]['id'], '9007199254740993')
+        self.assertEqual(len(result['faces'][0]['descriptor']), 512)
+        self.assertEqual(result['signature'], 'a' * 32)
+        self.assertEqual(result['revision'], None)
+
     def test_public_build_excludes_admin_and_secrets_and_checks_assets(self):
         build_spec = importlib.util.spec_from_file_location('build', ROOT / 'tools/build_site.py')
         builder = importlib.util.module_from_spec(build_spec); build_spec.loader.exec_module(builder)

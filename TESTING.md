@@ -59,3 +59,11 @@ Run `node tests/facenet_test.mjs` in addition to the tests above.
 - Actual browser example (schematic images, no real-face recognition): three groups merged into two; the intentionally misplaced A sample moved from B into A; group A then links three photos, B one. Crop/original preview and correction UI exercised.
 - Public build excludes local review page and scripts. No cloud write, persistence or production query changes.
 - Actual consenting event-photo clustering quality, ordering sensitivity and scale/performance remain unverified.
+
+
+## Reviewed group persistence and querying (2026-09-29)
+
+- Postgres integration now applies 001–005: a front-face match returns its manually linked side-face photo; unreviewed winners and ambiguous nearest groups return nothing; draft saves do not publish; unpublished edits preserve the live snapshot; invalid ownership, incomplete membership, dimensions and visitor permissions are rejected. Reimport makes snapshots stale and prevents querying/publishing them.
+- Edge mocked-backend test verifies published groups route to match_person_groups while ungrouped events retain match_photos.
+- 12 Python tests cover local event credential verification, consent/model checks, string face IDs beyond JavaScript precision, signature consistency and private-build boundaries.
+- Cloud migration and real deployment were not executed. Real photo group accuracy and end-user performance remain to be tested.
