@@ -1,6 +1,8 @@
 // Public, read-only search. Authentication is an unguessable per-event link token.
 // Never log request bodies: they contain biometric features.
 const MODEL = "face-api-0.22.2-ssd-landmark68-descriptor128-v1";
+const FACENET_MODEL = "facenet512-onnx-ssd68-align5-prewhiten-l2-v1";
+const DIMENSIONS: Record<string, number> = { [MODEL]: 128, [FACENET_MODEL]: 512 };
 const BASE = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SALT = Deno.env.get("RATE_LIMIT_SALT") || "";
@@ -46,10 +48,11 @@ Deno.serve(async (req: Request) => {
     if (!event || (event.expires_at && new Date(event.expires_at) <= new Date())) return reply(404, { error: "活动不存在、尚未开放或已关闭。请联系组织者。" });
     if (input.action === "search") {
       const d = input.descriptor;
-      if (!Array.isArray(d) || d.length !== 128 || !d.every((n: unknown) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 2))
+      const dimension = DIMENSIONS[event.model_version];
+      if (!dimension || !Array.isArray(d) || d.length !== dimension || !d.every((n: unknown) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 2))
         return reply(400, { error: "人脸特征格式错误，请重新选择自拍。" });
       const norm = Math.sqrt(d.reduce((sum: number, n: number) => sum + n * n, 0));
-      if (norm < 0.1 || norm > 3 || input.model !== MODEL || event.model_version !== MODEL)
+      if (norm < 0.1 || norm > 3 || input.model !== event.model_version || (event.model_version === FACENET_MODEL && Math.abs(norm - 1) > 0.01))
         return reply(400, { error: "识别模型不匹配，请刷新页面或联系组织者。" });
     }
     if (input.action !== "info" && (!Number.isInteger(input.offset) || input.offset < 0 || input.offset > 100000 || input.offset % 24 !== 0))
@@ -62,7 +65,7 @@ Deno.serve(async (req: Request) => {
     if (input.action === "info") {
       const summary = await backend("/rest/v1/rpc/gallery_summary", { p_event: event.id });
       const folder = event.drive_folder_id;
-      return reply(200, { title: input.lang === "it" ? (event.title_it || event.title) : event.title, ...summary,
+      return reply(200, { title: input.lang === "it" ? (event.title_it || event.title) : event.title, model: event.model_version, ...summary,
         drive_url: /^[A-Za-z0-9_-]{10,100}$/.test(folder || "") ? `https://drive.google.com/drive/folders/${folder}` : null });
     }
     const result = input.action === "browse"

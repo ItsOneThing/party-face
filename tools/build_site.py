@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ['index.html', 'styles.css', 'gallery.css', 'polish.css', 'config.js', 'app.js', 'recognition.js', 'i18n.js', 'gallery.js', 'gallery-ui.js', 'asset-checksums.json']
+FILES = ['index.html', 'styles.css', 'gallery.css', 'polish.css', 'config.js', 'app.js', 'recognition.js', 'recognition-router.js', 'facenet.js', 'facenet-math.js', 'i18n.js', 'gallery.js', 'gallery-ui.js', 'asset-checksums.json']
 
 def build():
     output = ROOT / 'dist'

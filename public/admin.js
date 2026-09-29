@@ -1,4 +1,5 @@
-import { loadModels, imageFromBlob, detectFaces, MODEL_VERSION } from './recognition.js';
+import { loadModels, detectFaces, MODEL_VERSION } from './facenet.js';
+import { imageFromBlob } from './recognition.js';
 const $ = id => document.getElementById(id);
 let session, pending = [], busy = false, stop = false, index = 0;
 let totalPhotos = 0, savedCount = 0, failedCount = 0;
@@ -25,7 +26,7 @@ $('scan').addEventListener('click', async () => {
   if (busy) return; setBusy(true); $('share').hidden = true; $('import-panel').hidden = true;
   $('admin-status').textContent = '正在递归扫描文件夹，较大的相册可能需要等待…';
   try {
-    const data = await api('/api/scan', { title: $('title').value, title_it: $('title-it').value, slug: $('slug').value, folder: $('folder').value, recognize: $('face-enabled').checked });
+    const data = await api('/api/scan', { title: $('title').value, title_it: $('title-it').value, slug: $('slug').value, folder: $('folder').value, recognize: $('face-enabled').checked, model: MODEL_VERSION });
     pending = data.pending; index = 0; $('log').textContent = '';
     totalPhotos = data.total; savedCount = data.skipped; failedCount = 0; updateSummary();
     $('progress').max = Math.max(pending.length, 1); $('progress').value = 0; $('import-panel').hidden = false;

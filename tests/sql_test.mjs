@@ -15,10 +15,18 @@ await db.exec(`create role anon; create role authenticated; create role service_
 await db.exec(readFileSync(new URL('../supabase/migrations/001_party_face.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../supabase/migrations/002_gallery.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../supabase/migrations/003_stricter_matching.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../supabase/migrations/004_facenet512.sql', import.meta.url), 'utf8'));
 const model = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1';
 const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 for (let i = 0; i < 2; i++) await db.query(`insert into events(id,slug,title,token_hash,drive_folder_id,model_version,active) values($1,$2,'Event',$3,'folder',$4,true)`, [ids[i], `event-${i}`, 'a'.repeat(64), model]);
 const descriptor = Array(128).fill(.1);
+const newModel='facenet512-onnx-ssd68-align5-prewhiten-l2-v1', newEvent='33333333-3333-4333-8333-333333333333';
+await db.query(`insert into events(id,slug,title,token_hash,drive_folder_id,model_version,threshold,active) values($1,'facenet-test','Test',$2,'folder',$3,.75,true)`,[newEvent,'b'.repeat(64),newModel]);
+const newDescriptor=Array(512).fill(0);newDescriptor[0]=1;
+await db.query(`select import_photo($1,'new-face','New','https://drive.google.com/file/d/x/view','thumb','fp',$2,$3::jsonb)`,[newEvent,newModel,JSON.stringify([{descriptor:newDescriptor,box:{}}])]);
+assert.equal((await db.query(`select match_photos($1,$2::extensions.vector) as result`,[newEvent,JSON.stringify(newDescriptor)])).rows[0].result.total,1);
+await assert.rejects(()=>db.query(`select match_photos($1,$2::extensions.vector)`,[newEvent,JSON.stringify(descriptor)]));
+await assert.rejects(()=>db.query(`select import_photo($1,'bad','Bad','url','thumb','fp',$2,$3::jsonb)`,[newEvent,newModel,JSON.stringify([{descriptor:Array(512).fill(.1),box:{}}])]));
 const faces = JSON.stringify([{ descriptor, box: { x: .1, y: .1, width: .2, height: .2 } }, { descriptor, box: { x: .4, y: .4, width: .2, height: .2 } }]);
 async function importPhoto(event, file, vectors = faces, version = model) {
   return db.query(`select import_photo($1,$2,$2,'https://drive.google.com/file/d/photo/view',$3,'fingerprint',$4,$5::jsonb) as id`, [event, file, `${event}/${file}.jpg`, version, vectors]);

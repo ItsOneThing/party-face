@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / 'public'
 DATA = ROOT / 'local-data'
 MODEL = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1'
+FACENET_MODEL = 'facenet512-onnx-ssd68-align5-prewhiten-l2-v1'
+MODEL_DIMENSIONS = {MODEL: 128, FACENET_MODEL: 512}
 DEFAULT_FOLDER = '1Rruj0bvN9gZzSbvtwEVbPRoUshQ0-X7x'
 SESSION = secrets.token_urlsafe(32)
 FILES = {}
@@ -129,6 +131,9 @@ def make_event(payload):
     slug = payload.get('slug', '').strip(); title = payload.get('title', '').strip()
     title_it = payload.get('title_it', '').strip() or None
     recognize = payload.get('recognize', True) is True
+    model = payload.get('model', MODEL)
+    if model not in MODEL_DIMENSIONS:
+        raise ValueError('不支持的识别模型。')
     if title_it and len(title_it) > 100:
         raise ValueError('意大利语活动名称最多 100 字符。')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,63}', slug) or not 1 <= len(title) <= 100:
@@ -144,14 +149,14 @@ def make_event(payload):
         saved = settings.get(slug)
         if not saved or hashlib.sha256(saved['key'].encode()).hexdigest() != event['token_hash']:
             raise ValueError('此活动编号已存在，但本机缺少对应访问码。请恢复 local-data 备份，或使用新编号。')
-        if event['drive_folder_id'] != folder or event['model_version'] != MODEL:
+        if event['drive_folder_id'] != folder or event['model_version'] != model:
             raise ValueError('活动编号已用于其他文件夹或模型，请为新活动使用新编号。')
         cloud('/rest/v1/events?id=eq.' + event['id'], 'PATCH', {'title': title, 'title_it': title_it})
         saved['title'] = title
     else:
         key = secrets.token_urlsafe(32)
         event = cloud('/rest/v1/events', 'POST', {'slug': slug, 'title': title, 'title_it': title_it, 'drive_folder_id': folder,
-                      'model_version': MODEL, 'threshold': 0.42, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
+                      'model_version': model, 'threshold': 0.75 if model == FACENET_MODEL else 0.42, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
         saved = {'id': event['id'], 'key': key, 'title': title, 'folder': folder}
         settings[slug] = saved
     save_settings(settings)
@@ -163,8 +168,8 @@ def make_event(payload):
         if len(rows) < 1000:
             break
         start += len(rows)
-    FILES = {p['id']: p for p in photos}; CURRENT = dict(saved, slug=slug)
-    pending = [p for p in photos if p['id'] not in imported or imported[p['id']]['fingerprint'] != p['fingerprint'] or imported[p['id']]['model_version'] != MODEL or (recognize and not imported[p['id']].get('face_indexed', True))]
+    FILES = {p['id']: p for p in photos}; CURRENT = dict(saved, slug=slug, model=model)
+    pending = [p for p in photos if p['id'] not in imported or imported[p['id']]['fingerprint'] != p['fingerprint'] or imported[p['id']]['model_version'] != model or (recognize and not imported[p['id']].get('face_indexed', True))]
     return {'total': len(photos), 'skipped': len(photos) - len(pending), 'pending': [{'id': p['id'], 'name': p['name']} for p in pending], 'warnings': warnings, 'active': event.get('active', False)}
 
 def image_path(file_id):
@@ -188,21 +193,25 @@ def image_path(file_id):
             img.thumbnail((640, 640)); img.save(thumb, 'JPEG', quality=72, optimize=True)
     return full, thumb
 
-def validate_faces(faces):
+def validate_faces(faces, model=MODEL):
     if not isinstance(faces, list) or len(faces) > 300:
         raise ValueError('人脸数据无效。')
     for face in faces:
         descriptor = face.get('descriptor')
-        if not isinstance(descriptor, list) or len(descriptor) != 128 or not all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) and abs(n) <= 2 for n in descriptor):
-            raise ValueError('人脸特征必须是 128 维有限数值。')
+        dimension = MODEL_DIMENSIONS.get(model)
+        if not dimension or not isinstance(descriptor, list) or len(descriptor) != dimension or not all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) and abs(n) <= 2 for n in descriptor):
+            raise ValueError('人脸特征维度或数值与模型不一致。')
+        if model == FACENET_MODEL and not 0.99 <= math.sqrt(sum(n*n for n in descriptor)) <= 1.01:
+            raise ValueError('FaceNet512 特征必须已单位归一化。')
         box = face.get('box', {})
         if not all(isinstance(box.get(k), (int, float)) and math.isfinite(box[k]) and 0 <= box[k] <= 1.1 for k in ('x', 'y', 'width', 'height')):
             raise ValueError('人脸坐标无效。')
 
 def save_photo(payload):
-    if not CURRENT or payload.get('id') not in FILES or payload.get('model') != MODEL:
+    if not CURRENT or payload.get('id') not in FILES or payload.get('model') != CURRENT.get('model', MODEL):
         raise ValueError('导入会话或模型无效。')
-    faces = payload.get('faces'); validate_faces(faces)
+    model = CURRENT.get('model', MODEL)
+    faces = payload.get('faces'); validate_faces(faces, model)
     indexed = payload.get('indexed', True)
     if not isinstance(indexed, bool) or (not indexed and faces):
         raise ValueError('未建立索引的照片不能包含人脸特征。')
@@ -214,11 +223,11 @@ def save_photo(payload):
     if item.get('resourceKey') and 'resourcekey=' not in url.lower():
         url += ('&' if '?' in url else '?') + 'resourcekey=' + urllib.parse.quote(item['resourceKey'])
     cloud('/rest/v1/rpc/import_photo', 'POST', {'p_event': CURRENT['id'], 'p_file': item['id'], 'p_name': item['name'],
-          'p_url': url, 'p_thumbnail': path, 'p_fingerprint': item['fingerprint'], 'p_model': MODEL, 'p_faces': faces,
+          'p_url': url, 'p_thumbnail': path, 'p_fingerprint': item['fingerprint'], 'p_model': model, 'p_faces': faces,
           'p_album': item.get('album_path', ''), 'p_indexed': indexed})
     # Keep a local backup of imported vectors; never publish local-data.
     backup = DATA / 'indexes' / CURRENT['slug']; backup.mkdir(parents=True, exist_ok=True)
-    (backup / (item['id'] + '.json')).write_text(json.dumps({'file': item, 'model': MODEL, 'faces': faces, 'indexed': indexed}))
+    (backup / (item['id'] + '.json')).write_text(json.dumps({'file': item, 'model': model, 'faces': faces, 'indexed': indexed}))
     return {'faces': len(faces)}
 
 def publish(payload):

@@ -1,5 +1,5 @@
 import { t, lang, initLanguage, localizedError } from './i18n.js';
-import { loadModels, imageFromBlob, detectFaces, MODEL_VERSION } from './recognition.js';
+import { loadModels, imageFromBlob, detectFaces, MODEL_VERSION, selectModel } from './recognition-router.js';
 import { createGallery } from './gallery.js';
 import { photoCard, initViewer } from './gallery-ui.js';
 initLanguage();
@@ -120,6 +120,7 @@ async function init() {
     $('event-title').textContent = data.title; $('event-pill').textContent = data.title;
     $('event-count').textContent = t('photoCount', { count: data.photo_count }); document.title = `${data.title} · partyface`;
     gallery.configure(data);
+    await selectModel(data.model || 'face-api-0.22.2-ssd-landmark68-descriptor128-v1');
     eventReady = data.indexed_photo_count > 0; status(eventReady ? t('simple') : data.photo_count > 0 ? t('galleryOnly') : t('preparing')); updateButton();
     $('fallback-browse').hidden = eventReady || data.photo_count === 0;
   } catch (error) { status(localizedError(error), true); gallery.fail(localizedError(error)); $('fallback-browse').hidden = false; }

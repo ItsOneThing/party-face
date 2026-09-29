@@ -29,7 +29,7 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 | 部分 | 技术 | 用途 |
 | --- | --- | --- |
 | 参加者网站 | HTML / CSS / JavaScript、GitHub Pages | 自拍分析、搜索结果与相册浏览 |
-| 人脸识别 | face-api.js 0.22.2 | 在参加者或组织者的浏览器中分析照片 |
+| 人脸识别 | FaceNet512 / ONNX Runtime Web；兼容旧 face-api.js | 在参加者或组织者的浏览器中分析照片 |
 | 查询后端 | Supabase Edge Functions、PostgreSQL / pgvector | 验证活动访问码、匹配与分页 |
 | 缩略图 | Supabase 私有 Storage | 提供临时签名链接 |
 | 原始照片 | Google Drive | 查看及下载原图 |
@@ -63,6 +63,7 @@ cd party-face
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python tools/download_models.py
+.venv/bin/python tools/download_facenet.py
 cp .env.example .env
 .venv/bin/python tools/server.py
 ```
@@ -75,7 +76,7 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 和 [003](supabase/migrations/003_stricter_matching.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 和 [004](supabase/migrations/004_facenet512.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
@@ -83,7 +84,13 @@ cp .env.example .env
 
 自动发布只包含允许的访客网页与模型文件；不发布管理页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
 
-系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。首次模型下载约 13 MB，真实手机效果和并发容量需要实测。
+系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。旧模型首次下载约 13 MB；新 FaceNet512 模型本体约 94 MB，另需运行时与检测模型。真实手机效果、首次加载时间和并发容量需要实测。
+
+## FaceNet512 升级
+
+新的本机导入工具使用 FaceNet512，访客页面按活动记录选择模型。旧活动仍使用原来的 128 维模型；512 维特征与旧特征不能混用，旧索引不能自动转换。
+
+先在 [纯本地测试页](http://127.0.0.1:8765/model-lab.html) 测试已取得明确同意的照片。模型与浏览器运行时已集成；更高维度本身不证明准确率提升，阈值 0.75 只是待校准的起点。详细流程见 [模型升级指南](docs/FACENET512.zh-CN.md)。
 
 ## 隐私与访问
 

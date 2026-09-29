@@ -38,3 +38,16 @@ node tests/sql_test.mjs /path/to/pglite/package /path/to/pglite-pgvector/package
 ```
 
 本地网页有模型检查页：<http://127.0.0.1:8765/diagnostics.html>。这个页面和管理员工具都不会被公开构建发布。
+
+
+## FaceNet512 upgrade (2026-09-29)
+
+- Actual in-app browser, synthetic input only: the local ONNX model produced 512 finite values, L2 norm 1.0000; one warm computation took approximately 0.10 seconds. This excludes first download, model initialization, detection and alignment, and is not a mobile benchmark or an accuracy test.
+- Synthetic math tests cover alignment rotation/translation/scale, degenerate landmarks, RGB prewhitening and L2 normalization.
+- Supabase SQL tests apply migrations 001–004 and verify coexisting 128/512-dimensional events, correct matching, model dimension rejection and normalization rejection.
+- Edge tests cover new-model validation and info response while retaining legacy requests, access-token checks, rate limits and signed thumbnails.
+- Importer tests cover 512-dimensional normalized descriptors and the existing import/resume and public-build boundaries.
+- New-model evaluation with consenting participants, calibration and held-out false-match/recall measurements, real mobile first-load performance and cloud deployment remain pending.
+- The local model lab is excluded from public builds and does not upload selected images or vectors.
+
+Run `node tests/facenet_test.mjs` in addition to the tests above.

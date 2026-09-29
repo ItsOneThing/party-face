@@ -37,6 +37,13 @@ class ImporterTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 server.validate_faces(bad)
 
+    def test_facenet_requires_512_normalized_features(self):
+        valid = {'descriptor': [1.0] + [0.0] * 511, 'box': {'x': 0, 'y': 0, 'width': 1, 'height': 1}}
+        server.validate_faces([valid], server.FACENET_MODEL)
+        for descriptor in ([0.0] * 512, [0.1] * 128, [1.0] * 512):
+            with self.assertRaises(ValueError):
+                server.validate_faces([dict(valid, descriptor=descriptor)], server.FACENET_MODEL)
+
     def test_recursion_pagination_dedup_and_unsupported_files(self):
         folder = {'id': 'subfolder123', 'name': 'sub', 'mimeType': 'application/vnd.google-apps.folder'}
         photo = {'id': 'photo1234567', 'name': 'A.jpg', 'mimeType': 'image/jpeg', 'md5Checksum': 'abc'}
