@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source=readFileSync(new URL('../public/online-admin.js',import.meta.url),'utf8').replace("import './admin-hub.js';",'').replace("await import('./person-groups-ui.js');",'');
 const config={supabaseUrl:'https://test.supabase.co',adminEndpoint:'https://test.supabase.co/functions/v1/admin-groups',supabasePublishableKey:'sb_publishable_TEST'};
-async function setup(key=config.supabasePublishableKey){
+async function setup(key=config.supabasePublishableKey,origin='https://itsonething.github.io'){
   const elements=new Map(),calls=[],events=[],timers=new Map();let timer=0,now=1000,refreshCount=0,fail=null,hold=null;
   const el=id=>{if(!elements.has(id))elements.set(id,{value:'',hidden:false,disabled:false,textContent:'',listeners:{},options:[],addEventListener(name,fn){this.listeners[name]=fn;},replaceChildren(...items){this.options=items;},append(item){this.options.push(item);}});return elements.get(id);};
   const fetch=async(url,options)=>{
@@ -14,12 +14,13 @@ async function setup(key=config.supabasePublishableKey){
     const body=JSON.parse(options.body);if(body.action==='events')return Response.json([{slug:'event-a',title:'A',role:'editor'},{slug:'event-b',title:'B',role:'owner'}]);
     if(hold)await hold;if(fail)return Response.json({error:'conflict'},{status:fail});return Response.json({revision:'draft'});
   };
-  const window={PARTY_CONFIG:{...config,supabasePublishableKey:key},dispatchEvent:e=>events.push(e.type)};
+  const listeners={},popup={messages:[],postMessage(data,target){this.messages.push({data,target});}},opener={messages:[],postMessage(data,target){this.messages.push({data,target});}};
+  const window={opener,open:()=>popup,addEventListener:(name,fn)=>listeners[name]=fn,PARTY_CONFIG:{...config,supabasePublishableKey:key},dispatchEvent:e=>events.push(e.type)};
   await vm.runInNewContext('(async()=>{'+source+'})()',{
-    window,document:{getElementById:el},URL,atob,fetch,Event,Option:function(text,value){this.text=text;this.value=value;},
+    window,location:{origin},document:{getElementById:el},URL,atob,fetch,Event,Option:function(text,value){this.text=text;this.value=value;},
     Date:{now:()=>now},setTimeout:(fn,delay)=>{timers.set(++timer,{fn,delay});return timer;},clearTimeout:id=>timers.delete(id)
   });
-  return {el,window,calls,events,timers,advance:ms=>now+=ms,refreshes:()=>refreshCount,setFail:code=>fail=code,setHold:promise=>hold=promise};
+  return {el,window,calls,events,timers,listeners,popup,opener,advance:ms=>now+=ms,refreshes:()=>refreshCount,setFail:code=>fail=code,setHold:promise=>hold=promise};
 }
 for(const key of ['', 'sb_secret_FORBIDDEN', 'eyJ.'+btoa(JSON.stringify({role:'service_role'}))+'.fake']){
   const t=await setup(key);assert.equal(t.el('admin-submit').disabled,true);assert.equal(t.calls.length,0);
@@ -41,3 +42,23 @@ assert.equal(t.window.PARTY_ADMIN_TRANSPORT.ready(),false);assert.equal(t.el('ad
 assert.ok(t.events.includes('party-admin-signout'));
 assert.equal(t.timers.size,0);
 console.log('Admin auth passed: public-key checks, password clearing, role UI, memory session, single refresh, conflict retention and sign-out invalidation of in-flight results.');
+
+const local=await setup(config.supabasePublishableKey,'http://127.0.0.1:8765');
+assert.equal(local.opener.messages[0].data.type,'partyface-login-ready');
+const handoff={type:'partyface-login-session',access_token:'temporary-access',expires_in:120};
+for(const [origin,source] of [['https://evil.invalid',local.opener],['https://itsonething.github.io',{}]]){
+ await local.listeners.message({origin,source,data:handoff});assert.equal(local.window.PARTY_ADMIN_TRANSPORT.ready(),false);
+}
+await local.listeners.message({origin:'https://itsonething.github.io',source:local.opener,data:handoff});
+assert.equal(local.window.PARTY_ADMIN_TRANSPORT.ready(),true);
+assert.equal(local.calls[0].options.headers.Authorization,'Bearer temporary-access');
+assert.ok(!local.calls.some(c=>c.url.includes('grant_type=password')),'handoff never resends a password');
+const donor=await setup();await donor.el('admin-login-form').listeners.submit({preventDefault(){}});
+donor.el('admin-local-link').listeners.click({preventDefault(){}});
+await donor.listeners.message({origin:'http://127.0.0.1:8765',source:{},data:{type:'partyface-login-ready'}});
+assert.equal(donor.popup.messages.length,0);
+await donor.listeners.message({origin:'http://127.0.0.1:8765',source:donor.popup,data:{type:'partyface-login-ready'}});
+assert.equal(donor.popup.messages.length,1);
+assert.equal(donor.popup.messages[0].target,'http://127.0.0.1:8765');
+assert.equal(donor.popup.messages[0].data.refresh_token,undefined,'rotating refresh token remains in original page');
+console.log('Session handoff passed: exact origin and window checks, remote authorization, no password/refresh token transfer.');
