@@ -118,7 +118,8 @@ cp .env.example .env
 界面布局与活动照片查找体验受到 [ENDU 活动照片页面](https://www.endu.net/it/events/polimirunspring/photos) 的启发。partyface 是独立开发的项目，与 ENDU 没有官方关联。
 
 - 照片来源：**passion lab polimi摄影社**。
-- 人脸识别：[face-api.js](https://github.com/justadudewhohacks/face-api.js)，感谢 Vincent Mühler 和上游贡献者。
+- 人脸检测与五官定位：[face-api.js](https://github.com/justadudewhohacks/face-api.js)，感谢 Vincent Mühler 和上游贡献者；旧活动的 128 维识别特征也由它生成。
+- 新活动的身份相似度特征：FaceNet512，经 [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) 在浏览器运行；模型来源及许可证见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 - 维护者：[ItsOneThing](https://github.com/ItsOneThing)。有任何问题，可以找 OneThing，或提交 [Issue](https://github.com/ItsOneThing/party-face/issues)。
 
 ## 开源许可证
