@@ -1,5 +1,9 @@
-import { loadModels, imageFromBlob, detectFaces, MODEL_VERSION } from './recognition.js';
+import { loadModels, detectFaces, MODEL_VERSION } from './facenet.js';
+import { imageFromBlob } from './recognition.js';
 const $ = id => document.getElementById(id);
+const parentTransport=window.parent!==window ? window.parent.PARTY_ADMIN_TRANSPORT : null;
+if(!parentTransport?.ready()){window.location.replace('admin.html');throw new Error('请先登录管理后台');}
+async function authHeaders(){return {Authorization:'Bearer '+await parentTransport.token()};}
 let session, pending = [], busy = false, stop = false, index = 0;
 let totalPhotos = 0, savedCount = 0, failedCount = 0;
 function log(text) { $('log').textContent += text + '\n'; $('log').scrollTop = $('log').scrollHeight; }
@@ -7,7 +11,7 @@ function updateSummary(completed = index) {
   $('summary').textContent = `${totalPhotos} 张照片 · ${savedCount} 张已完成 · ${Math.max(0, pending.length - completed)} 张待处理${failedCount ? ` · ${failedCount} 张失败待重试` : ''}`;
 }
 async function api(path, payload) {
-  const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Local-Session': session }, body: JSON.stringify(payload) });
+  const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Local-Session': session, ...await authHeaders() }, body: JSON.stringify(payload) });
   const body = await response.json(); if (!response.ok) throw new Error(body.error || '导入失败'); return body;
 }
 function setBusy(value) {
@@ -16,16 +20,16 @@ function setBusy(value) {
   $('stop').disabled = !value;
 }
 try {
-  const response = await fetch('/api/session'); if (!response.ok) throw new Error();
+  const response = await fetch('/api/session',{headers:await authHeaders()}); if (!response.ok) throw new Error((await response.json()).error||'无法连接导入服务');
   const data = await response.json(); session = data.session;
   $('admin-status').textContent = data.configured ? '本地配置已就绪。扫描前请确认参与者已获知活动照片的人脸检索用途。' : '请先按照 README 配置 .env 和 Supabase，再重启本地工具。密钥只填本地文件，不要发到聊天或 GitHub。';
   $('scan').disabled = !data.configured;
-} catch { $('admin-status').textContent = '管理工具只能通过 tools/server.py 启动后在本机使用，不能在 GitHub Pages 上导入。'; }
+} catch(error) { $('admin-status').textContent = error.message; }
 $('scan').addEventListener('click', async () => {
   if (busy) return; setBusy(true); $('share').hidden = true; $('import-panel').hidden = true;
   $('admin-status').textContent = '正在递归扫描文件夹，较大的相册可能需要等待…';
   try {
-    const data = await api('/api/scan', { title: $('title').value, title_it: $('title-it').value, slug: $('slug').value, folder: $('folder').value, recognize: $('face-enabled').checked });
+    const data = await api('/api/scan', { title: $('title').value, title_it: $('title-it').value, slug: $('slug').value, folder: $('folder').value, recognize: $('face-enabled').checked, model: MODEL_VERSION });
     pending = data.pending; index = 0; $('log').textContent = '';
     totalPhotos = data.total; savedCount = data.skipped; failedCount = 0; updateSummary();
     $('progress').max = Math.max(pending.length, 1); $('progress').value = 0; $('import-panel').hidden = false;
@@ -50,7 +54,7 @@ $('import').addEventListener('click', async () => {
       const photo = pending[index]; let url;
       log(`[${index + 1}/${pending.length}] ${photo.name}`);
       try {
-        const response = await fetch('/api/image?id=' + encodeURIComponent(photo.id), { headers: { 'X-Local-Session': session } });
+        const response = await fetch('/api/image?id=' + encodeURIComponent(photo.id), { headers: { 'X-Local-Session': session, ...await authHeaders() } });
         if (!response.ok) throw new Error((await response.json()).error);
         const blob = await response.blob(); url = URL.createObjectURL(blob); $('import-preview').src = url; $('import-preview').hidden = false;
         let faces = [], indexed = false;

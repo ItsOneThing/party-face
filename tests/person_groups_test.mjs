@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {addFace,mergeGroups,moveFace,photoIds} from '../public/person-groups.js';
+const face=(id,photoId,angle)=>({id,photoId,descriptor:[Math.cos(angle),Math.sin(angle),...new Array(510).fill(0)]});
+let groups=[];
+addFace(groups,face('a','p1',0));addFace(groups,face('b','p2',.3));addFace(groups,face('c','p3',.7));
+assert.equal(groups.length,2,'a weak chain must not connect distant endpoints');
+assert.deepEqual(photoIds(groups[0]),['p1','p2']);
+addFace(groups,face('d','p1',-.1));assert.equal(groups.length,3,'co-occurring people cannot auto-merge');
+assert.throws(()=>mergeGroups(groups,[groups[0].id,groups[2].id]),/同一照片/);
+assert.throws(()=>moveFace(groups,'d',groups[0].id),/同一照片/);
+groups=moveFace(groups,'b');assert.equal(groups.length,4);
+groups=mergeGroups(groups,[groups.find(g=>g.faces.some(f=>f.id==='b')).id,groups.find(g=>g.faces.some(f=>f.id==='c')).id]);
+assert.equal(groups.length,3);assert.equal(groups.find(g=>g.faces.some(f=>f.id==='b')).faces.length,2);
+assert.throws(()=>addFace(groups,face('a','p7',0)),/Duplicate/);
+assert.throws(()=>addFace([], {...face('bad','p',0),descriptor:[1]}),/Invalid/);
+let ambiguous=[];addFace(ambiguous,face('left','l',-.5));addFace(ambiguous,face('right','r',.5));addFace(ambiguous,face('mid','m',0));
+assert.equal(ambiguous.length,3,'equally plausible groups stay separate for review');
+console.log('Person grouping passed: no weak chains, no co-photo merging, ambiguity isolation, manual moves/merges, deduplication and model validation.');

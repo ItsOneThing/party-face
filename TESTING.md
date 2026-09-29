@@ -38,3 +38,45 @@ node tests/sql_test.mjs /path/to/pglite/package /path/to/pglite-pgvector/package
 ```
 
 本地网页有模型检查页：<http://127.0.0.1:8765/diagnostics.html>。这个页面和管理员工具都不会被公开构建发布。
+
+
+## FaceNet512 upgrade (2026-09-29)
+
+- Actual in-app browser, synthetic input only: the local ONNX model produced 512 finite values, L2 norm 1.0000; one warm computation took approximately 0.10 seconds. This excludes first download, model initialization, detection and alignment, and is not a mobile benchmark or an accuracy test.
+- Synthetic math tests cover alignment rotation/translation/scale, degenerate landmarks, RGB prewhitening and L2 normalization.
+- Supabase SQL tests apply migrations 001–004 and verify coexisting 128/512-dimensional events, correct matching, model dimension rejection and normalization rejection.
+- Edge tests cover new-model validation and info response while retaining legacy requests, access-token checks, rate limits and signed thumbnails.
+- Importer tests cover 512-dimensional normalized descriptors and the existing import/resume and public-build boundaries.
+- New-model evaluation with consenting participants, calibration and held-out false-match/recall measurements, real mobile first-load performance and cloud deployment remain pending.
+- The local model lab is excluded from public builds and does not upload selected images or vectors.
+
+Run `node tests/facenet_test.mjs` in addition to the tests above.
+
+
+## Local person grouping preview (2026-09-29)
+
+- `node tests/person_groups_test.mjs`: complete-link admission rejects weak chains; co-photo constraints prevent merging different co-occurring faces; ambiguous membership stays separate; moving/splitting/merging, unique photo lists, duplicate IDs and descriptor validation checked.
+- Actual browser example (schematic images, no real-face recognition): three groups merged into two; the intentionally misplaced A sample moved from B into A; group A then links three photos, B one. Crop/original preview and correction UI exercised.
+- Public build excludes local review page and scripts. No cloud write, persistence or production query changes.
+- Actual consenting event-photo clustering quality, ordering sensitivity and scale/performance remain unverified.
+
+
+## Reviewed group persistence and querying (2026-09-29)
+
+- Postgres integration now applies 001–005: a front-face match returns its manually linked side-face photo; unreviewed winners and ambiguous nearest groups return nothing; draft saves do not publish; unpublished edits preserve the live snapshot; invalid ownership, incomplete membership, dimensions and visitor permissions are rejected. Reimport makes snapshots stale and prevents querying/publishing them.
+- Edge mocked-backend test verifies published groups route to match_person_groups while ungrouped events retain match_photos.
+- 12 Python tests cover local event credential verification, consent/model checks, string face IDs beyond JavaScript precision, signature consistency and private-build boundaries.
+- Cloud migration and real deployment were not executed. Real photo group accuracy and end-user performance remain to be tested.
+
+## Online administrator collaboration
+
+- `node tests/admin_edge_test.mjs`: verifies the caller through Auth /user, ignores forged actor/role fields, rejects missing/invalid/anonymous/unconfirmed sessions, maps permission/conflict/rate errors, bounds body size, enforces CORS and signs private previews without exposing backend credentials.
+- SQL integration applies 001–006 against a synthetic auth.users table: event-scoped memberships, editor publication denial, outsider/cross-event denial, grant revocation, service-only RPC/table access, stale-index recovery, creator audit, two writers on the same baseline, publication baseline/latest-draft checks and per-account budget.
+- Public asset build includes the authenticated review page while still excluding the local importer, model lab, .env and local-data. Login sessions are kept in page memory.
+- Real Supabase credentials, account creation, production authentication and concurrent users were not exercised. No real photo reimport, migration execution or production deployment was performed in this change.
+
+- `node tests/admin_auth_test.mjs`: rejects secret/service keys in public configuration, clears the password field, gates owner controls, keeps tokens only in memory, shares concurrent refreshes, retains session on conflict and discards in-flight results after sign-out. Browser login-page preview has no console errors; missing public-key configuration disables login with an explicit setup message.
+
+- Unified admin hub: exact loopback origin only embeds import.html; the production page offers a link without making loopback requests. Tab switching preserves the importer iframe and keyboard navigation works. Browser preview confirms the local configuration is connected and the reviewer login panel appears on tab switch. Python public-build checks also exclude import.html.
+
+- Login-first gate: importer iframe is not loaded anonymously and is unloaded on signout. Local import APIs verify Auth identity and the local UID allowlist on every request, including photo downloads. Unit checks reject missing, unassigned, anonymous, unconfirmed and expired/invalid sessions.

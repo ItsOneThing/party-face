@@ -1,0 +1,50 @@
+/* Shared visual treatment for admin navigation, controls and the public entry. */
+#footer-admin{display:inline-flex;align-items:center;gap:10px;min-height:42px;padding:10px 15px;border:1px solid #aac9b7;border-radius:999px;background:#d0e5d8;color:#18563b;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;transition:background .18s,border-color .18s}
+#footer-admin::after{content:'↗';font-size:16px;font-weight:400}
+#footer-admin:hover{background:#bcdac9;border-color:#6a9f81}
+.groups-main{padding-top:28px;padding-bottom:80px}
+.groups-main>nav{padding-bottom:25px;margin-bottom:36px;border-bottom:1px solid #bcd3c4}
+.groups-main>nav>a{display:inline-flex;align-items:center;min-height:40px;text-decoration:none;font-size:14px;font-weight:600}
+.groups-main>.eyebrow{color:#4c7a5d;font-size:11px;letter-spacing:.16em;margin-bottom:12px}
+.groups-main>h1{max-width:800px;margin:0 0 14px;font-size:clamp(30px,4vw,46px);line-height:1.25;text-wrap:balance;letter-spacing:-.035em}
+.groups-main>h1+p{max-width:650px;color:#5c7465;font-size:15px;line-height:1.9;margin-bottom:30px}
+.groups-main .admin-card{border:1px solid #b8d3c2;border-radius:24px;background:#e5f1e9;padding:28px;box-shadow:0 12px 36px #17472a08}
+.groups-main .admin-card h2{margin:0 0 12px;font-size:24px;letter-spacing:-.025em}
+.groups-main .admin-card p{line-height:1.85;color:#577060}
+#admin-login{max-width:520px;margin:32px 0 14px}
+#admin-login-form label{font-size:13px;font-weight:600;color:#365843}
+.groups-main input:not([type=checkbox]):not([type=file]),.groups-main select,.admin-main input:not([type=checkbox]):not([type=file]){appearance:none;-webkit-appearance:none;width:100%;min-height:48px;border:1px solid #adcdb9;border-radius:12px;padding:12px 14px;background:#d9eade;color:#254c36;font:inherit;transition:border-color .18s,box-shadow .18s}
+.groups-main select{padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23365f46' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-position:right 14px center;background-repeat:no-repeat}
+.groups-main input::placeholder,.admin-main input::placeholder{color:#71947d}
+.groups-main input:focus-visible,.groups-main select:focus-visible,.admin-main input:focus-visible{outline:2px solid #228357;outline-offset:2px;border-color:#358361}
+.groups-main .primary,.groups-main .secondary,.admin-main .primary,.admin-main .secondary{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:46px;width:auto;border-radius:12px;padding:12px 18px;font-family:inherit;font-size:14px;font-weight:600;line-height:1.4;white-space:normal;text-align:center;transition:background .18s,border-color .18s}
+.groups-main .primary,.admin-main .primary{background:#176b47;color:#edf7ef;border:1px solid #176b47;box-shadow:0 3px 8px #176b4710}
+.groups-main .primary:hover:not(:disabled),.admin-main .primary:hover:not(:disabled){background:#105537;border-color:#105537}
+.groups-main .secondary,.admin-main .secondary{background:#d7e9dd;color:#235b3d;border:1px solid #abcab6}
+.groups-main .secondary:hover:not(:disabled),.admin-main .secondary:hover:not(:disabled){background:#c7e0d0;border-color:#76aa8b}
+.groups-main button:disabled,.admin-main button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+#admin-submit{width:100%;margin-top:4px;min-height:50px}
+#admin-auth-status{max-width:650px;font-size:13px;line-height:1.8;color:#55735f;overflow-wrap:anywhere}
+.admin-tabs{padding:6px;border:1px solid #b3cfbf;border-radius:17px;background:#cee3d6;gap:6px}
+.admin-tabs button{margin:0;border-radius:12px!important;border:0!important;box-shadow:none!important;min-height:48px}
+.admin-tabs button[aria-selected=false]{background:transparent!important;color:#52745e}
+.admin-tabs button[aria-selected=true]{background:#176b47;color:#edf7ef}
+.groups-main .person-heading input[type=text]{width:160px;min-height:40px;padding:8px 10px;border-radius:9px}
+.groups-main .face-tile .secondary,.groups-main .face-tile select{width:100%;min-height:36px;padding:7px;font-size:12px;border-radius:9px}
+.groups-main .face-tile select{padding-right:24px;background-position:right 6px center}
+.groups-main .person-card{border-radius:20px;background:#e5f1e9;border-color:#b4d0be;box-shadow:0 6px 18px #17472a05}
+.groups-main .group-actions{gap:10px}
+#group-cloud-status,#group-status{font-size:13px;line-height:1.8}
+.groups-main .consent{font-size:12px;line-height:1.8;margin-top:22px}
+.groups-main input[type=checkbox]{width:17px;height:17px;accent-color:#176b47}
+.admin-main .admin-card{border-radius:22px;border-color:#b8d3c2;background:#e5f1e9}
+@media(max-width:600px){
+ .groups-main{padding:20px 18px 55px}.groups-main>nav{margin-bottom:27px;padding-bottom:18px}
+ .groups-main>h1{font-size:32px}.groups-main>h1+p{font-size:14px;margin-bottom:24px}
+ .groups-main .admin-card{padding:22px 18px;border-radius:20px}#admin-login{margin-top:25px}
+ .groups-main input:not([type=checkbox]):not([type=file]),.groups-main select,.admin-main input:not([type=checkbox]):not([type=file]){font-size:16px}
+ .groups-main .group-actions>.primary,.groups-main .group-actions>.secondary{flex:1 1 180px}
+ .admin-tabs button{min-width:0!important;font-size:13px!important;padding:12px 8px!important}
+ #footer-admin{min-height:42px;font-size:11px;padding:9px 12px}
+}
+@media(prefers-reduced-motion:reduce){#footer-admin,.groups-main button,.groups-main input,.groups-main select{transition:none}}

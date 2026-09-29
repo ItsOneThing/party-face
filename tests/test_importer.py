@@ -13,6 +13,23 @@ server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 
 class ImporterTests(unittest.TestCase):
+    def test_import_requires_verified_allowlisted_user(self):
+        with patch.object(server, 'cloud') as mocked:
+            with self.assertRaises(server.LoginRequired): server.import_identity(None)
+            mocked.assert_not_called()
+        token = 'Bearer ' + 'x' * 40
+        user = {'id': 'trusted-id', 'email_confirmed_at': '2026-01-01', 'is_anonymous': False}
+        with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': 'trusted-id'}), patch.object(server, 'cloud', return_value=user) as mocked:
+            self.assertEqual(server.import_identity(token), 'trusted-id')
+            self.assertEqual(mocked.call_args.kwargs['extra']['Authorization'], token)
+        for denied in [dict(user, id='unassigned'), dict(user, is_anonymous=True), dict(user, email_confirmed_at=None)]:
+            with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': 'trusted-id'}), patch.object(server, 'cloud', return_value=denied):
+                with self.assertRaises((server.LoginRequired, server.ImportPermissionDenied)): server.import_identity(token)
+        with patch.dict(server.os.environ, {'SUPABASE_IMPORT_ADMIN_IDS': ''}), patch.object(server, 'cloud', return_value=user):
+            with self.assertRaises(server.ImportPermissionDenied): server.import_identity(token)
+        with patch.object(server, 'cloud', side_effect=ValueError('private message')):
+            with self.assertRaisesRegex(server.LoginRequired, '登录验证失败'): server.import_identity(token)
+
     def test_modern_secret_key_is_not_sent_as_bearer_jwt(self):
         with patch.dict(server.os.environ, {'SUPABASE_URL': 'https://test.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'sb_secret_test'}), patch.object(server, 'request', return_value=b'[]') as mocked:
             server.cloud('/rest/v1/events')
@@ -36,6 +53,13 @@ class ImporterTests(unittest.TestCase):
                     [dict(valid, box={'x': -1, 'y': 0, 'width': 1, 'height': 1})]):
             with self.assertRaises(ValueError):
                 server.validate_faces(bad)
+
+    def test_facenet_requires_512_normalized_features(self):
+        valid = {'descriptor': [1.0] + [0.0] * 511, 'box': {'x': 0, 'y': 0, 'width': 1, 'height': 1}}
+        server.validate_faces([valid], server.FACENET_MODEL)
+        for descriptor in ([0.0] * 512, [0.1] * 128, [1.0] * 512):
+            with self.assertRaises(ValueError):
+                server.validate_faces([dict(valid, descriptor=descriptor)], server.FACENET_MODEL)
 
     def test_recursion_pagination_dedup_and_unsupported_files(self):
         folder = {'id': 'subfolder123', 'name': 'sub', 'mimeType': 'application/vnd.google-apps.folder'}
@@ -94,6 +118,36 @@ class ImporterTests(unittest.TestCase):
             self.assertEqual(server.make_event(dict(payload, recognize=False))['skipped'], 1)
             self.assertEqual(server.make_event(dict(payload, recognize=True))['pending'], [{'id': 'p1', 'name': 'A.jpg'}])
 
+    def test_group_access_rejects_missing_consent_or_legacy_models(self):
+        with self.assertRaises(ValueError):
+            server.group_load({'slug': 'test-event'})
+        key = 'K' * 43
+        event = {'id': 'id', 'token_hash': hashlib.sha256(key.encode()).hexdigest(), 'model_version': server.MODEL}
+        with patch.object(server, 'local_settings', return_value={'test-event': {'id': 'id', 'key': key}}), patch.object(server, 'cloud', return_value=[event]):
+            with self.assertRaises(ValueError):
+                server.group_event({'slug': 'test-event'})
+            event['model_version'] = server.FACENET_MODEL
+            self.assertEqual(server.group_event({'slug': 'test-event'})['id'], 'id')
+            event['token_hash'] = 'wrong'
+            with self.assertRaises(ValueError):
+                server.group_event({'slug': 'test-event'})
+
+    def test_group_loading_returns_string_face_ids_and_matching_signature(self):
+        face = {'id': 9007199254740993, 'photo_id': 'photo', 'embedding': json.dumps([1] + [0] * 511), 'box': {'x': 0, 'y': 0, 'width': 1, 'height': 1}}
+        def cloud(path, *args, **kwargs):
+            if 'person_index_signature' in path: return 'a' * 32
+            if '/photos?' in path: return [{'id': 'photo', 'name': 'A.jpg', 'drive_url': 'url', 'thumbnail_path': 'thumb'}]
+            if '/faces?' in path: return [face]
+            if '/object/sign/' in path: return [{'path': 'thumb', 'signedURL': '/object/sign/temp'}]
+            if '/person_group_revisions?' in path: return []
+            raise AssertionError(path)
+        with patch.object(server, 'group_event', return_value={'id': 'event', 'slug': 'test-event'}), patch.object(server, 'cloud', side_effect=cloud), patch.dict(server.os.environ, {'SUPABASE_URL': 'https://test.supabase.co'}):
+            result = server.group_load({'slug': 'test-event', 'consent': True})
+        self.assertEqual(result['faces'][0]['id'], '9007199254740993')
+        self.assertEqual(len(result['faces'][0]['descriptor']), 512)
+        self.assertEqual(result['signature'], 'a' * 32)
+        self.assertEqual(result['revision'], None)
+
     def test_public_build_excludes_admin_and_secrets_and_checks_assets(self):
         build_spec = importlib.util.spec_from_file_location('build', ROOT / 'tools/build_site.py')
         builder = importlib.util.module_from_spec(build_spec); build_spec.loader.exec_module(builder)
@@ -103,11 +157,17 @@ class ImporterTests(unittest.TestCase):
                 (public / name).write_text('asset')
             for name in ['art', 'models', 'vendor']:
                 (public / name).mkdir()
+            (public / 'import.html').write_text('private importer')
             (public / 'admin.html').write_text('private UI')
+            (public / 'person-groups.html').write_text('private review UI')
             (root / '.env').write_text('SECRET=private')
             with patch.object(builder, 'ROOT', root):
                 builder.build()
             self.assertFalse((root / 'dist/admin.html').exists())
+            self.assertFalse((root / 'dist/import.html').exists())
+            self.assertFalse((root / 'dist/person-groups.html').exists())
+            self.assertTrue((root / 'dist/person-groups-ui.js').exists())
+            self.assertTrue((root / 'dist/online-admin.html').exists())
             self.assertFalse((root / 'dist/.env').exists())
             self.assertTrue((root / 'dist/index.html').exists())
 

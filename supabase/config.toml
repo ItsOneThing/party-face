@@ -2,3 +2,7 @@ project_id = "party-face"
 [functions.search-photos]
 verify_jwt = false
 
+
+# Auth is verified against /auth/v1/user inside this handler on EVERY request.
+[functions.admin-groups]
+verify_jwt = false

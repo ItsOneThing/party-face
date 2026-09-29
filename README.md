@@ -29,7 +29,7 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 | 部分 | 技术 | 用途 |
 | --- | --- | --- |
 | 参加者网站 | HTML / CSS / JavaScript、GitHub Pages | 自拍分析、搜索结果与相册浏览 |
-| 人脸识别 | face-api.js 0.22.2 | 在参加者或组织者的浏览器中分析照片 |
+| 人脸识别 | FaceNet512 / ONNX Runtime Web；兼容旧 face-api.js | 在参加者或组织者的浏览器中分析照片 |
 | 查询后端 | Supabase Edge Functions、PostgreSQL / pgvector | 验证活动访问码、匹配与分页 |
 | 缩略图 | Supabase 私有 Storage | 提供临时签名链接 |
 | 原始照片 | Google Drive | 查看及下载原图 |
@@ -63,6 +63,7 @@ cd party-face
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python tools/download_models.py
+.venv/bin/python tools/download_facenet.py
 cp .env.example .env
 .venv/bin/python tools/server.py
 ```
@@ -75,15 +76,33 @@ cp .env.example .env
 
 ## 部署
 
-1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 和 [003](supabase/migrations/003_stricter_matching.sql) 数据库迁移。
+1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 、[005](supabase/migrations/005_person_groups.sql) 和 [006](supabase/migrations/006_online_admin.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
 3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
 5. 使用本机工具导入照片并开放活动。
 
-自动发布只包含允许的访客网页与模型文件；不发布管理页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
+自动发布包含允许的访客网页、登录后的在线分组核对页与模型文件；不发布本地导入页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
 
-系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。首次模型下载约 13 MB，真实手机效果和并发容量需要实测。
+系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。旧模型首次下载约 13 MB；新 FaceNet512 模型本体约 94 MB，另需运行时与检测模型。真实手机效果、首次加载时间和并发容量需要实测。
+
+## FaceNet512 升级
+
+新的本机导入工具使用 FaceNet512，访客页面按活动记录选择模型。旧活动仍使用原来的 128 维模型；512 维特征与旧特征不能混用，旧索引不能自动转换。
+
+先在 [纯本地测试页](http://127.0.0.1:8765/model-lab.html) 测试已取得明确同意的照片。模型与浏览器运行时已集成；更高维度本身不证明准确率提升，阈值 0.75 只是待校准的起点。详细流程见 [模型升级指南](docs/FACENET512.zh-CN.md)。
+
+## 人物分组查询（实验）
+
+组织者可读取新的 FaceNet512 活动索引，检查人物组，合并或移出认错的人脸，保存私有草稿后发布。参加者仍只上传一张自拍，命中已核对组后返回该组关联的照片。未核对或模糊匹配不会直接返回人物组结果；已发布版本独立于未发布草稿。
+
+需要 005–006 迁移、新版 Edge Function 与访客网站发布。查看 [分组部署与使用指南](docs/PERSON_GROUPS.zh-CN.md)。本机照片实验不直接写入活动；真实分组质量仍需验证。
+
+## 多人在线核对
+
+本地 `admin.html` 与线上 `online-admin.html` 提供统一的“导入照片 / 人物分组”页签：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入仍在组织者本机完成，并内嵌在本地 admin 的导入页签中；线上入口会引导组织者启动本地服务。
+
+需要部署新的 `admin-groups` Edge Function、运行 006 迁移、创建管理员账号并配置公开 Publishable key。查看 [在线后台配置与协作指南](docs/ONLINE_ADMIN.zh-CN.md)。这是共享草稿与版本检查，不是实时共同编辑；真实云端登录和协作需配置后验证。
 
 ## 隐私与访问
 
@@ -107,3 +126,5 @@ cp .env.example .env
 partyface 自有源码与文档采用 [MIT License](LICENSE)。欢迎使用、修改与分发，并保留版权及许可证声明。
 
 **MIT 许可不授予活动照片、第三方品牌或私人数据的使用权。** 第三方依赖保留各自的许可证，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+本地 admin 也要求先登录。请在本机 `.env` 设置 `SUPABASE_IMPORT_ADMIN_IDS=获授权组织者账号UID` 并重启服务；该名单控制本机导入接口，分组账号仍按活动分配角色。详见在线后台指南。

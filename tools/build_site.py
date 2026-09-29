@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ['index.html', 'styles.css', 'gallery.css', 'polish.css', 'config.js', 'app.js', 'recognition.js', 'i18n.js', 'gallery.js', 'gallery-ui.js', 'asset-checksums.json']
+FILES = ['index.html', 'admin-entry.js', 'admin-ui.css', 'styles.css', 'gallery.css', 'polish.css', 'config.js', 'app.js', 'recognition.js', 'recognition-router.js', 'facenet.js', 'facenet-math.js', 'i18n.js', 'gallery.js', 'gallery-ui.js', 'asset-checksums.json', 'online-admin.html', 'online-admin.js', 'admin-hub.js', 'person-groups-ui.js', 'person-groups.js', 'person-groups.css']
 
 def build():
     output = ROOT / 'dist'
@@ -19,7 +19,7 @@ def build():
     for name in ['art', 'models', 'vendor']:
         shutil.copytree(ROOT / 'public' / name, output / name)
     (output / '.nojekyll').touch()
-    print('Built dist/: website and models only. No admin, secrets or biometric indexes.')
+    print('Built dist/: website and models only. Includes authenticated review page. No local importer, secrets or biometric indexes.')
 
 if __name__ == '__main__':
     build()

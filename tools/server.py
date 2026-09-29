@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / 'public'
 DATA = ROOT / 'local-data'
 MODEL = 'face-api-0.22.2-ssd-landmark68-descriptor128-v1'
+FACENET_MODEL = 'facenet512-onnx-ssd68-align5-prewhiten-l2-v1'
+MODEL_DIMENSIONS = {MODEL: 128, FACENET_MODEL: 512}
 DEFAULT_FOLDER = '1Rruj0bvN9gZzSbvtwEVbPRoUshQ0-X7x'
 SESSION = secrets.token_urlsafe(32)
 FILES = {}
@@ -65,6 +67,27 @@ def cloud(path, method='GET', body=None, extra=None, raw=False):
     payload = body if isinstance(body, bytes) else (json.dumps(body).encode() if body is not None else None)
     result = request(base + path, method, payload, headers)
     return result if raw else (json.loads(result) if result else None)
+
+class LoginRequired(ValueError):
+    pass
+
+class ImportPermissionDenied(ValueError):
+    pass
+
+def import_identity(authorization):
+    # Auth verifies the signed access token on EVERY request. A decoded JWT is never trusted.
+    if not isinstance(authorization, str) or not re.fullmatch(r'Bearer [A-Za-z0-9_.-]{20,8192}', authorization):
+        raise LoginRequired('请先登录管理后台。')
+    try:
+        user = cloud('/auth/v1/user', extra={'Authorization': authorization})
+    except ValueError:
+        raise LoginRequired('登录验证失败，请重新登录或检查网络。') from None
+    if not isinstance(user, dict) or not user.get('id') or user.get('is_anonymous') or not user.get('email_confirmed_at'):
+        raise LoginRequired('请使用已确认邮箱的管理员账号。')
+    allowed = {item.strip() for item in os.environ.get('SUPABASE_IMPORT_ADMIN_IDS', '').split(',') if item.strip()}
+    if user['id'] not in allowed:
+        raise ImportPermissionDenied('该账号没有本机导入权限。请在本地 .env 的 SUPABASE_IMPORT_ADMIN_IDS 填写获授权账号的 UID，并重启服务。')
+    return user['id']
 
 def drive(params):
     params = dict(params, key=required('GOOGLE_DRIVE_API_KEY'))
@@ -129,6 +152,9 @@ def make_event(payload):
     slug = payload.get('slug', '').strip(); title = payload.get('title', '').strip()
     title_it = payload.get('title_it', '').strip() or None
     recognize = payload.get('recognize', True) is True
+    model = payload.get('model', MODEL)
+    if model not in MODEL_DIMENSIONS:
+        raise ValueError('不支持的识别模型。')
     if title_it and len(title_it) > 100:
         raise ValueError('意大利语活动名称最多 100 字符。')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,63}', slug) or not 1 <= len(title) <= 100:
@@ -144,14 +170,14 @@ def make_event(payload):
         saved = settings.get(slug)
         if not saved or hashlib.sha256(saved['key'].encode()).hexdigest() != event['token_hash']:
             raise ValueError('此活动编号已存在，但本机缺少对应访问码。请恢复 local-data 备份，或使用新编号。')
-        if event['drive_folder_id'] != folder or event['model_version'] != MODEL:
+        if event['drive_folder_id'] != folder or event['model_version'] != model:
             raise ValueError('活动编号已用于其他文件夹或模型，请为新活动使用新编号。')
         cloud('/rest/v1/events?id=eq.' + event['id'], 'PATCH', {'title': title, 'title_it': title_it})
         saved['title'] = title
     else:
         key = secrets.token_urlsafe(32)
         event = cloud('/rest/v1/events', 'POST', {'slug': slug, 'title': title, 'title_it': title_it, 'drive_folder_id': folder,
-                      'model_version': MODEL, 'threshold': 0.42, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
+                      'model_version': model, 'threshold': 0.75 if model == FACENET_MODEL else 0.42, 'token_hash': hashlib.sha256(key.encode()).hexdigest()}, {'Prefer': 'return=representation'})[0]
         saved = {'id': event['id'], 'key': key, 'title': title, 'folder': folder}
         settings[slug] = saved
     save_settings(settings)
@@ -163,8 +189,8 @@ def make_event(payload):
         if len(rows) < 1000:
             break
         start += len(rows)
-    FILES = {p['id']: p for p in photos}; CURRENT = dict(saved, slug=slug)
-    pending = [p for p in photos if p['id'] not in imported or imported[p['id']]['fingerprint'] != p['fingerprint'] or imported[p['id']]['model_version'] != MODEL or (recognize and not imported[p['id']].get('face_indexed', True))]
+    FILES = {p['id']: p for p in photos}; CURRENT = dict(saved, slug=slug, model=model)
+    pending = [p for p in photos if p['id'] not in imported or imported[p['id']]['fingerprint'] != p['fingerprint'] or imported[p['id']]['model_version'] != model or (recognize and not imported[p['id']].get('face_indexed', True))]
     return {'total': len(photos), 'skipped': len(photos) - len(pending), 'pending': [{'id': p['id'], 'name': p['name']} for p in pending], 'warnings': warnings, 'active': event.get('active', False)}
 
 def image_path(file_id):
@@ -188,21 +214,25 @@ def image_path(file_id):
             img.thumbnail((640, 640)); img.save(thumb, 'JPEG', quality=72, optimize=True)
     return full, thumb
 
-def validate_faces(faces):
+def validate_faces(faces, model=MODEL):
     if not isinstance(faces, list) or len(faces) > 300:
         raise ValueError('人脸数据无效。')
     for face in faces:
         descriptor = face.get('descriptor')
-        if not isinstance(descriptor, list) or len(descriptor) != 128 or not all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) and abs(n) <= 2 for n in descriptor):
-            raise ValueError('人脸特征必须是 128 维有限数值。')
+        dimension = MODEL_DIMENSIONS.get(model)
+        if not dimension or not isinstance(descriptor, list) or len(descriptor) != dimension or not all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) and abs(n) <= 2 for n in descriptor):
+            raise ValueError('人脸特征维度或数值与模型不一致。')
+        if model == FACENET_MODEL and not 0.99 <= math.sqrt(sum(n*n for n in descriptor)) <= 1.01:
+            raise ValueError('FaceNet512 特征必须已单位归一化。')
         box = face.get('box', {})
         if not all(isinstance(box.get(k), (int, float)) and math.isfinite(box[k]) and 0 <= box[k] <= 1.1 for k in ('x', 'y', 'width', 'height')):
             raise ValueError('人脸坐标无效。')
 
 def save_photo(payload):
-    if not CURRENT or payload.get('id') not in FILES or payload.get('model') != MODEL:
+    if not CURRENT or payload.get('id') not in FILES or payload.get('model') != CURRENT.get('model', MODEL):
         raise ValueError('导入会话或模型无效。')
-    faces = payload.get('faces'); validate_faces(faces)
+    model = CURRENT.get('model', MODEL)
+    faces = payload.get('faces'); validate_faces(faces, model)
     indexed = payload.get('indexed', True)
     if not isinstance(indexed, bool) or (not indexed and faces):
         raise ValueError('未建立索引的照片不能包含人脸特征。')
@@ -214,11 +244,11 @@ def save_photo(payload):
     if item.get('resourceKey') and 'resourcekey=' not in url.lower():
         url += ('&' if '?' in url else '?') + 'resourcekey=' + urllib.parse.quote(item['resourceKey'])
     cloud('/rest/v1/rpc/import_photo', 'POST', {'p_event': CURRENT['id'], 'p_file': item['id'], 'p_name': item['name'],
-          'p_url': url, 'p_thumbnail': path, 'p_fingerprint': item['fingerprint'], 'p_model': MODEL, 'p_faces': faces,
+          'p_url': url, 'p_thumbnail': path, 'p_fingerprint': item['fingerprint'], 'p_model': model, 'p_faces': faces,
           'p_album': item.get('album_path', ''), 'p_indexed': indexed})
     # Keep a local backup of imported vectors; never publish local-data.
     backup = DATA / 'indexes' / CURRENT['slug']; backup.mkdir(parents=True, exist_ok=True)
-    (backup / (item['id'] + '.json')).write_text(json.dumps({'file': item, 'model': MODEL, 'faces': faces, 'indexed': indexed}))
+    (backup / (item['id'] + '.json')).write_text(json.dumps({'file': item, 'model': model, 'faces': faces, 'indexed': indexed}))
     return {'faces': len(faces)}
 
 def publish(payload):
@@ -234,6 +264,85 @@ def publish(payload):
             raise ValueError('至少导入一张照片后才能发布。')
     cloud('/rest/v1/events?id=eq.' + CURRENT['id'], 'PATCH', {'active': active})
     return {'active': active, 'link': base.rstrip('/') + '/?event=' + CURRENT['slug'] + '#key=' + CURRENT['key']}
+
+def group_event(payload):
+    slug = payload.get('slug', '')
+    if not isinstance(slug, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,63}', slug):
+        raise ValueError('请填写有效的活动编号。')
+    saved = local_settings().get(slug)
+    if not saved or not saved.get('key'):
+        raise ValueError('本机没有这个活动的访问码，请恢复 local-data 备份。')
+    events = cloud('/rest/v1/events?slug=eq.' + slug + '&select=*')
+    if not events or events[0]['id'] != saved['id'] or events[0]['token_hash'] != hashlib.sha256(saved['key'].encode()).hexdigest():
+        raise ValueError('活动与本机访问码不一致。')
+    if events[0]['model_version'] != FACENET_MODEL:
+        raise ValueError('人物分组仅用于新的 FaceNet512 活动，不能混用旧模型特征。')
+    return events[0]
+
+def group_load(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload); event_id = event['id']
+    signature = cloud('/rest/v1/rpc/person_index_signature', 'POST', {'p_event': event_id})
+    photos = cloud('/rest/v1/photos?event_id=eq.' + event_id + '&select=id,name,drive_url,thumbnail_path&order=id&limit=501')
+    if len(photos) > 500:
+        raise ValueError('当前分组工具最多处理 500 张照片，请使用较小的测试活动。')
+    faces = []; offset = 0
+    while True:
+        rows = cloud('/rest/v1/faces?event_id=eq.' + event_id + '&select=id,photo_id,embedding,box&order=id&limit=1000&offset=' + str(offset))
+        faces.extend(rows)
+        if len(faces) > 2000:
+            raise ValueError('当前分组工具最多处理 2000 张人脸，请使用较小的测试活动。')
+        if len(rows) < 1000: break
+        offset += len(rows)
+    if not faces:
+        raise ValueError('这个活动还没有人脸索引，请先完成 FaceNet512 导入。')
+    if signature != cloud('/rest/v1/rpc/person_index_signature', 'POST', {'p_event': event_id}):
+        raise ValueError('导入索引正在变化，请完成导入后再读取。')
+    signed = cloud('/storage/v1/object/sign/event-thumbnails', 'POST', {'paths': [p['thumbnail_path'] for p in photos], 'expiresIn': 3600})
+    urls = {s['path']: required('SUPABASE_URL').rstrip('/') + '/storage/v1' + s['signedURL'] for s in signed if s.get('signedURL')}
+    output_photos = [{'id': p['id'], 'name': p['name'], 'url': urls.get(p['thumbnail_path'], ''), 'drive_url': p['drive_url']} for p in photos]
+    output_faces = [{'id': str(f['id']), 'photoId': f['photo_id'], 'descriptor': json.loads(f['embedding']) if isinstance(f['embedding'], str) else f['embedding'], 'box': f['box']} for f in faces]
+    revisions = cloud('/rest/v1/person_group_revisions?event_id=eq.' + event_id + '&index_signature=eq.' + signature + '&select=id&order=created_at.desc,id.desc&limit=1')
+    saved_groups = []; revision = revisions[0]['id'] if revisions else None
+    if revision:
+        offset = 0
+        while True:
+            rows = cloud('/rest/v1/person_groups?revision_id=eq.' + revision + '&select=id,name,reviewed&order=id&limit=1000&offset=' + str(offset))
+            saved_groups.extend(rows)
+            if len(rows) < 1000: break
+            offset += len(rows)
+        members = cloud('/rest/v1/person_group_faces?revision_id=eq.' + revision + '&select=group_id,face_id&order=face_id&limit=1000')
+        if len(members) == 1000:
+            members += cloud('/rest/v1/person_group_faces?revision_id=eq.' + revision + '&select=group_id,face_id&order=face_id&limit=1000&offset=1000')
+        for group in saved_groups:
+            group['faces'] = [str(m['face_id']) for m in members if m['group_id'] == group['id']]
+    return {'event': event_id, 'slug': event['slug'], 'signature': signature, 'photos': output_photos, 'faces': output_faces,
+            'groups': saved_groups, 'revision': revision, 'published': event.get('published_group_revision'), 'base_revision': event.get('latest_group_revision')}
+
+def group_save(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload)
+    groups = payload.get('groups')
+    if not isinstance(groups, list) or not 1 <= len(groups) <= 2000:
+        raise ValueError('分组数据无效。')
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get('name', ''), str) or len(group.get('name', '')) > 60 or not isinstance(group.get('reviewed'), bool) or not isinstance(group.get('faces'), list):
+            raise ValueError('分组数据无效。')
+    signature = payload.get('signature')
+    if not isinstance(signature, str) or not re.fullmatch(r'[a-f0-9]{32}', signature):
+        raise ValueError('请重新读取活动索引后再保存。')
+    return cloud('/rest/v1/rpc/save_person_groups_checked', 'POST', {'p_event': event['id'], 'p_groups': groups, 'p_signature': signature, 'p_base_revision': payload.get('base_revision')})
+
+def group_publish(payload):
+    if payload.get('consent') is not True:
+        raise ValueError('请先确认人物已明确同意识别与分组测试。')
+    event = group_event(payload); revision = payload.get('revision', '')
+    if not isinstance(revision, str) or not re.fullmatch(r'[a-f0-9-]{36}', revision):
+        raise ValueError('请先保存分组，再发布保存的版本。')
+    cloud('/rest/v1/rpc/publish_person_groups_checked', 'POST', {'p_event': event['id'], 'p_revision': revision, 'p_base_published': payload.get('base_published')})
+    return {'published': revision, 'active': event['active']}
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -263,14 +372,25 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == '/api/session':
             if self.headers.get('Sec-Fetch-Site') not in (None, 'same-origin', 'none'):
                 return self.respond(403, {'error': 'Invalid origin'})
+            try:
+                import_identity(self.headers.get('Authorization'))
+            except LoginRequired as error:
+                return self.respond(401, {'error': str(error)})
+            except ImportPermissionDenied as error:
+                return self.respond(403, {'error': str(error)})
             return self.respond(200, {'session': SESSION, 'configured': all(os.environ.get(k) and 'YOUR_' not in os.environ[k] for k in ('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GOOGLE_DRIVE_API_KEY')), 'folder': DEFAULT_FOLDER})
         if url.path == '/api/image':
             if self.headers.get('X-Local-Session') != SESSION:
                 return self.respond(403, {'error': 'Invalid session'})
             try:
+                import_identity(self.headers.get('Authorization'))
                 file_id = urllib.parse.parse_qs(url.query).get('id', [''])[0]
                 full, _ = image_path(file_id); data = full.read_bytes()
                 self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data)
+            except LoginRequired as error:
+                self.respond(401, {'error': str(error)})
+            except ImportPermissionDenied as error:
+                self.respond(403, {'error': str(error)})
             except ValueError as error:
                 self.respond(400, {'error': str(error)})
             return
@@ -293,13 +413,19 @@ class Handler(SimpleHTTPRequestHandler):
             if not LOCK.acquire(blocking=False):
                 return self.respond(409, {'error': '另一个导入任务正在运行，请稍后重试。'})
             try:
-                actions = {'/api/scan': make_event, '/api/save': save_photo, '/api/publish': publish}
+                actions = {'/api/scan': make_event, '/api/save': save_photo, '/api/publish': publish,
+                           '/api/groups/load': group_load, '/api/groups/save': group_save, '/api/groups/publish': group_publish}
                 if self.path not in actions:
                     return self.respond(404, {'error': 'Not found'})
+                import_identity(self.headers.get('Authorization'))
                 result = actions[self.path](payload)
             finally:
                 LOCK.release()
             self.respond(200, result)
+        except LoginRequired as error:
+            self.respond(401, {'error': str(error)})
+        except ImportPermissionDenied as error:
+            self.respond(403, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             # ValueError from our own validation is safe; JSON/PIL parsing is generic.
             import sys

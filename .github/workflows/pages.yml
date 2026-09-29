@@ -22,7 +22,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Prepare pinned recognition assets
-        run: python tools/download_models.py
+        run: |
+          python tools/download_models.py
+          python tools/download_facenet.py
       - name: Build public site only
         run: python tools/build_site.py
       - uses: actions/configure-pages@v5
