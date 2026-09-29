@@ -117,7 +117,12 @@ $('group-load').addEventListener('click',async()=>{
     cloudContext={slug,signature:data.signature,revision:data.revision,published:data.published,baseRevision:data.base_revision??data.revision};dirty=!data.revision;
     cloudStatus(data.revision?'已恢复保存的草稿。'+(data.published===data.revision?'这个版本已发布。':'修改后需重新保存；发布草稿后才改变线上查询。'):'已生成新分组，请核对后保存草稿。');
     status('活动索引已读取。裁剪预览来自缩略图，对齐裁剪未保存在旧索引中。');
-  }catch(error){cloudStatus('读取失败：'+error.message+'。请检查活动权限、006 迁移和管理服务。');}
+  }catch(error){
+    cloudStatus((['EMPTY_EVENT','NO_FACE_INDEX'].includes(error.code)?'暂时无法分组：':'读取失败：')+error.message);
+    if(['EMPTY_EVENT','NO_FACE_INDEX'].includes(error.code)&&online?.ready()&&online.canPublish(slug)&&$('admin-import-tab')){
+      $('group-cloud-status').append(document.createTextNode(' '),button('前往导入照片',()=>$('admin-import-tab').click()));
+    }
+  }
   finally{busy=false;render();ready();}
 });
 $('group-save').addEventListener('click',async()=>{

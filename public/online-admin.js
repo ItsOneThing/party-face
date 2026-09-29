@@ -40,7 +40,7 @@ async function request(action,payload={}){
   if(generation!==epoch)throw new Error('已退出。');
   const data=await response.json();
   if(response.status===401){clearSession('登录已失效，请重新登录。');throw new Error('请重新登录。');}
-  if(!response.ok)throw new Error(data.error||'管理请求失败。');return data;
+  if(!response.ok){const error=new Error(data.error||'管理请求失败。');error.code=data.code;throw error;}return data;
 }
 window.PARTY_ADMIN_TRANSPORT={
   token,
@@ -73,4 +73,3 @@ $('admin-login-form').addEventListener('submit',async event=>{
   }catch(error){clearSession(error.message);}finally{$('admin-submit').disabled=false;}
 });
 try{configure();authStatus('使用负责人为你创建的管理员账号登录。');}catch(error){authStatus(error.message);$('admin-submit').disabled=true;}
-

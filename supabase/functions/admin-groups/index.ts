@@ -41,6 +41,25 @@ Deno.serve(async (req: Request) => {
       if (data.code === "P0429") return reply(429, { error: "管理请求较多，请稍后再试。" });
       if (data.code === "42501") return reply(403, { error: "此账号没有该活动的权限；仅负责人可以发布。" });
       if (data.code === "40001") return reply(409, { error: "其他管理员已保存或索引已变化。你的修改仍在本页；先记录修改，再重新读取最新草稿核对。" });
+      // This RPC error occurs only after activity permission and consent checks succeed.
+      // Inspect counts, never embeddings, to distinguish an empty activity from a size limit.
+      if (input.action === "load" && data.code === "P0001" && data.message === "Use an indexed activity with at most 500 photos and 2000 faces") {
+        const eventResponse = await fetch(`${BASE}/rest/v1/events?slug=eq.${encodeURIComponent(input.slug)}&select=id`, { headers: serviceHeaders });
+        if (!eventResponse.ok) throw new Error("Unavailable");
+        const events = await eventResponse.json();
+        if (!events[0]?.id) throw new Error("Unavailable");
+        const counts = await Promise.all(["photos", "faces"].map(async table => {
+          const countResponse = await fetch(`${BASE}/rest/v1/${table}?event_id=eq.${encodeURIComponent(events[0].id)}&select=id`,
+            { method: "HEAD", headers: { ...serviceHeaders, Prefer: "count=exact" } });
+          const count = countResponse.headers.get("content-range")?.split("/")[1];
+          if (!countResponse.ok || !count || !/^\d+$/.test(count)) throw new Error("Unavailable");
+          return Number(count);
+        }));
+        if (!counts[0]) return reply(400, { code: "EMPTY_EVENT", error: "此活动还没有导入照片。请先在「导入照片」中扫描并开始导入，再回来读取分组。" });
+        if (counts[0] > 500 || counts[1] > 2000) return reply(400, { code: "GROUP_LIMIT", error: "此活动超过当前分组上限（500 张照片、2000 张人脸）。请拆分为较小活动后分组。" });
+        if (!counts[1]) return reply(400, { code: "NO_FACE_INDEX", error: "照片已导入，但还没有可用于分组的人脸索引。仅浏览照片无需分组；人物分组需要在取得明确同意后启用人脸索引并重新扫描导入。" });
+        return reply(409, { error: "索引在读取时发生变化，请重新读取。" });
+      }
       return reply(400, { error: "分组无效或索引已变化，请检查活动、完整分组与 006 迁移。" });
     }
     if (input.action === "load") {

@@ -4,16 +4,18 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source=stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/admin-groups/index.ts',import.meta.url),'utf8'));
 const actor='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-function setup({authStatus=200,error=null,anonymous=false,confirmed=true,broken=false}={}){
+function setup({authStatus=200,error=null,anonymous=false,confirmed=true,broken=false,message="private database details",counts=[0,0],countFailure=false}={}){
   let handler;const calls=[];
   const fetch=async(url,options={})=>{
     calls.push({url,options});if(broken)throw new Error('private backend message');
     if(url.endsWith('/auth/v1/user'))return Response.json({id:actor,is_anonymous:anonymous,email_confirmed_at:confirmed?'2026-01-01':null},{status:authStatus});
     if(url.includes('/rpc/admin_groups')){
       const input=JSON.parse(options.body);
-      if(error)return Response.json({code:error,message:'private database details'},{status:400});
+      if(error)return Response.json({code:error,message},{status:400});
       return Response.json(input.p_action==='events'?[{slug:'test-event',role:'editor'}]:{photos:[{id:'photo',name:'A',drive_url:'drive',thumbnail_path:'private/photo'}],faces:[{id:'1',descriptor:[1]}],groups:[]});
     }
+    if(url.includes('/rest/v1/events?'))return Response.json([{id:actor}]);
+    if(url.includes('/rest/v1/photos?')||url.includes('/rest/v1/faces?'))return new Response(null,{status:countFailure?503:200,headers:{'content-range':'*/'+counts[url.includes('/photos?')?0:1]}});
     if(url.includes('/object/sign/'))return Response.json([{path:'private/photo',signedURL:'/object/sign/event-thumbnails/photo?token=short'}]);
     throw new Error('unexpected backend');
   };
@@ -49,3 +51,22 @@ assert.equal(result.body.photos[0].url,'https://test.supabase.co/storage/v1/obje
 assert.equal('thumbnail_path' in result.body.photos[0],false);
 assert.equal(JSON.stringify(result.body).includes('SERVER_ONLY'),false);
 console.log('Admin Edge passed: Auth verification, actor forgery, permissions, conflicts, budget, CORS, body bounds, no credential/error leakage and private signed previews.');
+
+const emptyMessage='Use an indexed activity with at most 500 photos and 2000 faces';
+for(const [counts,code] of [[[0,0],'EMPTY_EVENT'],[[30,0],'NO_FACE_INDEX'],[[501,0],'GROUP_LIMIT'],[[30,2001],'GROUP_LIMIT']]){
+  test=setup({error:'P0001',message:emptyMessage,counts});
+  result=await invoke(test,{action:'load',slug:'test-event',consent:true});
+  assert.equal(result.status,400);assert.equal(result.body.code,code);
+  assert.equal(result.body.error.includes('006'),false);
+  assert.equal(test.calls.filter(c=>c.options.method==='HEAD').length,2);
+  assert.equal(test.calls.some(c=>c.url.includes('embedding')),false);
+}
+for(const error of ['42501','P0429']){
+  test=setup({error,message:emptyMessage});await invoke(test,{action:'load',slug:'test-event',consent:true});
+  assert.equal(test.calls.length,2,'denied and throttled requests never query counts');
+}
+test=setup({error:'P0001'});await invoke(test,{action:'load',slug:'test-event',consent:true});
+assert.equal(test.calls.length,2,'unknown RPC errors do not query activity metadata');
+result=await invoke(setup({error:'P0001',message:emptyMessage,countFailure:true}),{action:'load',slug:'test-event',consent:true});
+assert.equal(result.status,503,'failed diagnostics must not claim an empty activity');
+console.log('Empty activity diagnostics passed: no photos, no face index, size limits, permission boundary and unavailable counts.');
