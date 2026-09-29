@@ -43,22 +43,3 @@ assert.ok(t.events.includes('party-admin-signout'));
 assert.equal(t.timers.size,0);
 console.log('Admin auth passed: public-key checks, password clearing, role UI, memory session, single refresh, conflict retention and sign-out invalidation of in-flight results.');
 
-const local=await setup(config.supabasePublishableKey,'http://127.0.0.1:8765');
-assert.equal(local.opener.messages[0].data.type,'partyface-login-ready');
-const handoff={type:'partyface-login-session',access_token:'temporary-access',expires_in:120};
-for(const [origin,source] of [['https://evil.invalid',local.opener],['https://itsonething.github.io',{}]]){
- await local.listeners.message({origin,source,data:handoff});assert.equal(local.window.PARTY_ADMIN_TRANSPORT.ready(),false);
-}
-await local.listeners.message({origin:'https://itsonething.github.io',source:local.opener,data:handoff});
-assert.equal(local.window.PARTY_ADMIN_TRANSPORT.ready(),true);
-assert.equal(local.calls[0].options.headers.Authorization,'Bearer temporary-access');
-assert.ok(!local.calls.some(c=>c.url.includes('grant_type=password')),'handoff never resends a password');
-const donor=await setup();await donor.el('admin-login-form').listeners.submit({preventDefault(){}});
-donor.el('admin-local-link').listeners.click({preventDefault(){}});
-await donor.listeners.message({origin:'http://127.0.0.1:8765',source:{},data:{type:'partyface-login-ready'}});
-assert.equal(donor.popup.messages.length,0);
-await donor.listeners.message({origin:'http://127.0.0.1:8765',source:donor.popup,data:{type:'partyface-login-ready'}});
-assert.equal(donor.popup.messages.length,1);
-assert.equal(donor.popup.messages[0].target,'http://127.0.0.1:8765');
-assert.equal(donor.popup.messages[0].data.refresh_token,undefined,'rotating refresh token remains in original page');
-console.log('Session handoff passed: exact origin and window checks, remote authorization, no password/refresh token transfer.');

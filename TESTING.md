@@ -80,3 +80,10 @@ Run `node tests/facenet_test.mjs` in addition to the tests above.
 - Unified admin hub: exact loopback origin only embeds import.html; the production page offers a link without making loopback requests. Tab switching preserves the importer iframe and keyboard navigation works. Browser preview confirms the local configuration is connected and the reviewer login panel appears on tab switch. Python public-build checks also exclude import.html.
 
 - Login-first gate: importer iframe is not loaded anonymously and is unloaded on signout. Local import APIs verify Auth identity and the local UID allowlist on every request, including photo downloads. Unit checks reject missing, unassigned, anonymous, unconfirmed and expired/invalid sessions.
+
+
+## Integrated online import
+
+- `node tests/online_import_edge_test.mjs`: confirmed Auth, verified actor ownership, editor/outsider denial, explicit creator allowlist, folder ancestry checks, tamper-proof photo tickets, model/consent/vector/thumbnail validation, bounded bodies, private key redaction, browse-only save and owner-only publication.
+- Admin hub attaches the same-origin online importer only after login, preserves the iframe on tab switches, and unloads on sign-out.
+- Browser preview and live deployment checks do not constitute a real participant face accuracy or capacity test. No real biometric reimport is performed automatically.

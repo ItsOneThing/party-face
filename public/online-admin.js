@@ -18,7 +18,7 @@ function clearSession(message='已退出，本页活动数据已清空。'){
   window.dispatchEvent(new Event('party-admin-signout'));authStatus(message);
 }
 function installSession(data){
-  if(!data.access_token || (!data.refresh_token && !data.handoff) || !data.expires_in)throw new Error('登录响应无效。');
+  if(!data.access_token || !data.refresh_token || !data.expires_in)throw new Error('登录响应无效。');
   session={...data,expiresAt:Date.now()+data.expires_in*1000};
   clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>clearSession('登录已过期，请重新登录。'),data.expires_in*1000);
 }
@@ -29,7 +29,6 @@ async function authRequest(path,body){
 async function token(){
   if(!session)throw new Error('请重新登录。');
   if(Date.now()>session.expiresAt-60000){
-    if(session.handoff){clearSession('临时登录已过期，请从在线后台重新打开本地后台，或在这里登录。');throw new Error('临时登录已过期。');}
     if(!refreshPromise){const generation=epoch;refreshPromise=authRequest('/auth/v1/token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(data=>{if(generation!==epoch)throw new Error('已退出。');installSession(data);}).catch(error=>{if(generation===epoch)clearSession('登录已失效，请重新登录。');throw error;}).finally(()=>{if(generation===epoch)refreshPromise=null;});}
     await refreshPromise;
   }
@@ -45,6 +44,7 @@ async function request(action,payload={}){
 }
 window.PARTY_ADMIN_TRANSPORT={
   token,
+  refreshActivities:()=>showWorkspace(),
   request:(path,payload)=>request(path.split('/').pop(),payload),
   ready:()=>!!session,
   canPublish:slug=>activities.get(slug)?.role==='owner',
@@ -53,7 +53,7 @@ window.PARTY_ADMIN_TRANSPORT={
 };
 await import('./person-groups-ui.js');
 $('admin-signout').addEventListener('click',async()=>{
-  const access=session?.handoff?null:session?.access_token;clearSession();
+  const access=session?.access_token;clearSession();
   if(access)try{await fetch(config.supabaseUrl+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:config.supabasePublishableKey,Authorization:'Bearer '+access}});}catch{/* Local state is already removed; server tokens expire. */}
 });
 async function showWorkspace(){
@@ -74,37 +74,3 @@ $('admin-login-form').addEventListener('submit',async event=>{
 });
 try{configure();authStatus('使用负责人为你创建的管理员账号登录。');}catch(error){authStatus(error.message);$('admin-submit').disabled=true;}
 
-// Explicit user-initiated handoff. No credentials in URL, storage or logs.
-// Only the window we open on the exact loopback origin may receive an access token.
-const LOCAL_ORIGIN='http://127.0.0.1:8765';
-const ONLINE_ORIGIN='https://itsonething.github.io';
-let importWindow=null, handoffAccepted=false;
-const localLink=$('admin-local-link');
-if(localLink && location.origin===ONLINE_ORIGIN){
-  localLink.addEventListener('click',event=>{
-    if(!session)return;
-    event.preventDefault();
-    importWindow=window.open(LOCAL_ORIGIN+'/admin.html','_blank');
-    if(!importWindow)authStatus('浏览器阻止了新窗口，请允许打开本地管理后台。');
-  });
-}
-window.addEventListener('message',async event=>{
-  if(location.origin===ONLINE_ORIGIN && event.origin===LOCAL_ORIGIN && event.source===importWindow && event.data?.type==='partyface-login-ready' && session){
-    try{
-      const access=await token();
-      if(!session || event.source!==importWindow)return;
-      event.source.postMessage({type:'partyface-login-session',access_token:access,expires_in:Math.floor((session.expiresAt-Date.now())/1000)},LOCAL_ORIGIN);
-    }catch{/* Expired sessions require a new login. */}
-  }else if(location.origin===LOCAL_ORIGIN && event.origin===ONLINE_ORIGIN && event.source===window.opener && event.data?.type==='partyface-login-session' && !session && !handoffAccepted){
-    handoffAccepted=true;
-    try{
-      configure();
-      const {access_token,expires_in}=event.data;
-      if(typeof access_token!=='string' || access_token.length>8192 || !Number.isFinite(expires_in) || expires_in<=60 || expires_in>3600)throw new Error('临时登录无效，请重新登录。');
-      epoch++;installSession({access_token,expires_in,handoff:true});
-      // The remote API verifies the token and current permissions before tools are opened.
-      await showWorkspace();
-    }catch(error){clearSession(error.message);}
-  }
-});
-if(location.origin===LOCAL_ORIGIN && window.opener)window.opener.postMessage({type:'partyface-login-ready'},ONLINE_ORIGIN);

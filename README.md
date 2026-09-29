@@ -33,9 +33,9 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 | 查询后端 | Supabase Edge Functions、PostgreSQL / pgvector | 验证活动访问码、匹配与分页 |
 | 缩略图 | Supabase 私有 Storage | 提供临时签名链接 |
 | 原始照片 | Google Drive | 查看及下载原图 |
-| 本机导入工具 | Python、Pillow、管理网页 | 扫描文件夹、生成缩略图、建立人脸索引 |
+| 在线导入 | 管理网页、浏览器识别、Supabase Edge Function | 扫描 Drive、生成缩略图、保存人脸索引 |
 
-**导入工具只在组织者电脑运行。** 导入完成后，参加者访问线上网站；组织者不需要一直开着电脑。
+管理员在在线后台完成导入，识别计算在管理员的浏览器运行。导入完成后，参加者访问线上网站；组织者不需要一直开着电脑。
 
 ## 使用流程
 
@@ -48,7 +48,7 @@ partyface 是一个可重复使用的活动照片网站，支持中文和意大�
 **组织者**
 
 1. 配置 Supabase、Google Drive API 和 GitHub Pages。
-2. 在本机打开 `admin.html`，输入活动名称、编号和照片文件夹。
+2. 登录在线后台 `online-admin.html`，输入活动名称、编号和照片文件夹。
 3. 扫描并导入照片，检查失败记录和样本识别效果。
 4. 开放活动，先测试，再分享完整活动链接。
 5. 下次活动换一个编号和文件夹，复用同一套系统。
@@ -78,17 +78,17 @@ cp .env.example .env
 
 1. 在 Supabase 依次运行 [001](supabase/migrations/001_party_face.sql)、[002](supabase/migrations/002_gallery.sql) 、[003](supabase/migrations/003_stricter_matching.sql) 、[004](supabase/migrations/004_facenet512.sql) 、[005](supabase/migrations/005_person_groups.sql) 和 [006](supabase/migrations/006_online_admin.sql) 数据库迁移。
 2. 部署 [search-photos](supabase/functions/search-photos/index.ts) Edge Function，配置 `ALLOWED_ORIGINS` 和 `RATE_LIMIT_SALT`；由代码验证活动访问码。
-3. 在 `public/config.js` 填入自己的公开接口地址，并配置本机 `.env`。
+3. 部署 `admin-groups` 和 `admin-import`，配置服务端 Secrets；在 `public/config.js` 填入公开接口地址和 Publishable key。详见 [在线后台指南](docs/ONLINE_ADMIN.zh-CN.md)。
 4. 在公开 GitHub 仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，运行 **Publish partyface**。
-5. 使用本机工具导入照片并开放活动。
+5. 在在线后台导入照片并开放活动。
 
-自动发布包含允许的访客网页、登录后的在线分组核对页与模型文件；不发布本地导入页面、密钥或人脸备份。部署时会自动下载固定版本识别资源。
+自动发布包含允许的访客网页、登录后的在线分组核对页与模型文件；发布在线导入表单，不发布本地导入服务、密钥或人脸备份。部署时会自动下载固定版本识别资源。
 
 系统以免费计划为目标，不依赖付费 AI 识别服务。平台仍有容量、流量和暂停规则；不能承诺无限免费、几秒完成或 250 人同时访问不卡顿。旧模型首次下载约 13 MB；新 FaceNet512 模型本体约 94 MB，另需运行时与检测模型。真实手机效果、首次加载时间和并发容量需要实测。
 
 ## FaceNet512 升级
 
-新的本机导入工具使用 FaceNet512，访客页面按活动记录选择模型。旧活动仍使用原来的 128 维模型；512 维特征与旧特征不能混用，旧索引不能自动转换。
+新的在线导入及本机测试工具使用 FaceNet512，访客页面按活动记录选择模型。旧活动仍使用原来的 128 维模型；512 维特征与旧特征不能混用，旧索引不能自动转换。
 
 先在 [纯本地测试页](http://127.0.0.1:8765/model-lab.html) 测试已取得明确同意的照片。模型与浏览器运行时已集成；更高维度本身不证明准确率提升，阈值 0.75 只是待校准的起点。详细流程见 [模型升级指南](docs/FACENET512.zh-CN.md)。
 
@@ -100,7 +100,7 @@ cp .env.example .env
 
 ## 多人在线核对
 
-本地 `admin.html` 与线上 `online-admin.html` 提供统一的“导入照片 / 人物分组”页签：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入仍在组织者本机完成，并内嵌在本地 admin 的导入页签中；线上入口会引导组织者启动本地服务。
+本地 `admin.html` 与线上 `online-admin.html` 提供统一的“导入照片 / 人物分组”页签：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入已集成到在线后台，识别在浏览器中完成，后端验证权限并保存缩略图与索引，无需启动本地服务。
 
 需要部署新的 `admin-groups` Edge Function、运行 006 迁移、创建管理员账号并配置公开 Publishable key。查看 [在线后台配置与协作指南](docs/ONLINE_ADMIN.zh-CN.md)。这是共享草稿与版本检查，不是实时共同编辑；真实云端登录和协作需配置后验证。
 
@@ -130,10 +130,14 @@ partyface 自有源码与文档采用 [MIT License](LICENSE)。欢迎使用、�
 本地 admin 也要求先登录。请在本机 `.env` 设置 `SUPABASE_IMPORT_ADMIN_IDS=获授权组织者账号UID` 并重启服务；该名单控制本机导入接口，分组账号仍按活动分配角色。详见在线后台指南。
 
 
-## 在线登录与本地导入
+## 在线导入照片
 
-从正式网站的在线后台登录后，点击“打开本地管理后台”，可以沿用临时登录状态，无需再输入一次密码。请先启动本机 `start.command`。该跳转仅支持当前正式域名 `https://itsonething.github.io` 与 `http://127.0.0.1:8765`，其他部署需同步修改 `public/online-admin.js` 的允许来源。
+登录 `online-admin.html` 后，直接在“导入照片”页签粘贴公开 Drive 文件夹，扫描、开始导入、暂停或重试。无需安装或启动本地服务，也不再跳转到另一个后台登录。人脸识别在当前浏览器运行；密钥只保存在 Supabase，照片原图仍留在 Drive。
 
-登录凭据不写入网址、浏览器存储或日志；只把短期访问令牌发给本次打开的本地窗口，不传密码和刷新令牌。本地仍验证账号及 `.env` 导入白名单。临时登录到期或页面刷新后，可从在线后台再次打开，或直接在本地登录。直接本地登录可刷新会话，更适合长时间导入。
+部署 `supabase/functions/admin-import/index.ts` 为 `admin-import`，关闭网关 Verify JWT（函数内部每次调用 Auth 验证用户，并检查活动 owner）。Secrets 设置 `GOOGLE_DRIVE_API_KEY`、`ALLOWED_ORIGINS`；允许创建新活动的账号 UID 使用 `IMPORT_ADMIN_IDS`，逗号分隔。已有活动 owner 可导入该活动；editor 只能核对分组。新活动创建后为创建人授予 owner，默认关闭查询。
 
-旧 128 维特征不能转换为 512 维。经活动负责人明确决定删除旧索引时，可使用 `python tools/reset_event.py 活动编号` 先检查，再加 `--execute` 清除该活动的旧索引、分组、衍生缩略图和对应本地缓存，保留活动编号、访问码、管理员授权以及 Google Drive 原图。活动关闭，模型改为 FaceNet512，等待重新导入；这不是普通升级操作，也不会自动重新处理照片。人脸索引仍只用于已取得明确同意的照片。
+扫描包含子文件夹，自动跳过未修改且已完成的照片。人脸识别默认关闭，仅用于已取得明确同意的照片；模型加载失败时仍可导入浏览，之后重新扫描补建索引。支持 JPG、PNG、WebP，每张最多 25 MB；保持浏览器打开、电脑不要休眠。识别特征及缩略图保存到 Supabase，不把原图保存到 Supabase。原图读取会经过 Edge Function，仍受免费计划的请求数、流量和文件限制，不能保证无限免费或大批量同时导入。
+
+每次“开放活动并生成链接”会更新访问码，旧链接失效；普通照片追加无需重新生成链接。重新导入会使已发布人物组过期，须完成导入后重新读取并核对分组。
+
+旧 128 维特征不能转换为 512 维。经活动负责人明确决定删除旧索引时，可使用 `python tools/reset_event.py 活动编号` 先检查，再加 `--execute` 清除该活动的旧索引、分组、衍生缩略图和对应本地缓存，保留活动编号、管理员授权以及 Google Drive 原图。活动关闭，模型改为 FaceNet512，等待重新导入；这不是普通升级操作，也不会自动重新处理照片。本地旧导入工具仍保留，在线重新生成访问码后，本地备份中的旧访问码不再匹配，应使用在线后台继续管理。
