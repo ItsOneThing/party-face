@@ -1,6 +1,6 @@
 # 多人在线核对人物分组
 
-新增 `online-admin.html`，可随 GitHub Pages 发布。每位管理员用自己的 Supabase Auth 邮箱和密码登录；活动权限由组织者在数据库分配。此页只核对已有 FaceNet512 索引，不导入照片，也不开放活动。
+新增统一管理入口：本地 `admin.html` 与线上 `online-admin.html` 都有“导入照片”和“人物分组”两个页签。线上入口可随 GitHub Pages 发布。每位管理员用自己的 Supabase Auth 邮箱和密码登录；活动权限由组织者在数据库分配。“人物分组”核对已有 FaceNet512 索引；本地“导入照片”内嵌原导入工具，也保留活动开放和链接生成操作。线上“导入照片”显示启动本地服务的说明和入口，不会直接请求你电脑的服务。
 
 ## 一次性配置
 
@@ -23,7 +23,7 @@
 
    `editor` 可以读取、核对和保存；把负责人对应记录的 role 改为 `owner`，才能发布。角色不会通过注册、邮箱或客户端字段自动获得。活动必须使用新模型并已有索引，旧的 128 维活动不显示。
 5. 在项目 **Settings → API Keys** 找公开的 **Publishable key**（`sb_publishable_...`），或 Legacy **anon** key，在 `public/config.js` 填写 `supabasePublishableKey`。`supabaseUrl`、`adminEndpoint` 必须对应同一项目。**绝不能填 Secret key / service_role key**；公开 key 是登录应用的标识，管理员权限仍由登录会话和后端会员表验证。
-6. 检查后发布 GitHub Pages，管理员入口为 `https://itsonething.github.io/party-face/online-admin.html`。本地预览入口为 `http://127.0.0.1:8765/online-admin.html`，也连接同一 Supabase。重启本地服务使本地分组工具使用新的版本检查。
+6. 检查后发布 GitHub Pages，管理员入口为 `https://itsonething.github.io/party-face/online-admin.html`。本地统一入口为 `http://127.0.0.1:8765/admin.html`：默认显示导入照片，切换人物分组后登录同一 Supabase。原导入页面移到 `import.html`，仍仅本地使用。重启本地服务使本地分组工具使用新的版本检查。
 
 这里仅新增文件与配置说明；写代码不会自动执行迁移、建立账号、分配权限或部署云端。
 
@@ -52,3 +52,5 @@ where event_id=(select id from public.events where slug='替换成活动编号')
 已用本地 Postgres/WASM、模拟 Auth/Storage 和页面预览检查权限、版本冲突和请求约束。真实 Supabase 登录、两位管理员协作及生产部署需完成配置后验证。人物分组仍需要人工核对；协作功能本身不提高识别准确率，也不替代活动参加者的有效授权。
 
 Supabase 官方依据：[密码登录](https://supabase.com/docs/reference/javascript/auth-signinwithpassword)、[服务器验证用户](https://supabase.com/docs/reference/javascript/auth-getuser)。
+
+切换管理页签不会重载正在导入的页面，但刷新整个后台、关闭标签页或返回入口会中断本轮浏览器导入。切换到分组后仍应等待导入完成再读取索引。

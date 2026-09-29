@@ -100,7 +100,7 @@ cp .env.example .env
 
 ## 多人在线核对
 
-新增 `online-admin.html`：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入仍在组织者本机完成。
+本地 `admin.html` 与线上 `online-admin.html` 提供统一的“导入照片 / 人物分组”页签：管理员用自己的 Supabase Auth 账号登录，按活动分配 editor / owner 权限，共享分组草稿。只有负责人可以发布；两人从同一草稿保存时，后保存的人会收到冲突提示，防止覆盖。照片导入仍在组织者本机完成，并内嵌在本地 admin 的导入页签中；线上入口会引导组织者启动本地服务。
 
 需要部署新的 `admin-groups` Edge Function、运行 006 迁移、创建管理员账号并配置公开 Publishable key。查看 [在线后台配置与协作指南](docs/ONLINE_ADMIN.zh-CN.md)。这是共享草稿与版本检查，不是实时共同编辑；真实云端登录和协作需配置后验证。
 

@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const source=readFileSync(new URL('../public/online-admin.js',import.meta.url),'utf8').replace("await import('./person-groups-ui.js');",'');
+const source=readFileSync(new URL('../public/online-admin.js',import.meta.url),'utf8').replace("import './admin-hub.js';",'').replace("await import('./person-groups-ui.js');",'');
 const config={supabaseUrl:'https://test.supabase.co',adminEndpoint:'https://test.supabase.co/functions/v1/admin-groups',supabasePublishableKey:'sb_publishable_TEST'};
 async function setup(key=config.supabasePublishableKey){
   const elements=new Map(),calls=[],events=[],timers=new Map();let timer=0,now=1000,refreshCount=0,fail=null,hold=null;

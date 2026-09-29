@@ -76,3 +76,5 @@ Run `node tests/facenet_test.mjs` in addition to the tests above.
 - Real Supabase credentials, account creation, production authentication and concurrent users were not exercised. No real photo reimport, migration execution or production deployment was performed in this change.
 
 - `node tests/admin_auth_test.mjs`: rejects secret/service keys in public configuration, clears the password field, gates owner controls, keeps tokens only in memory, shares concurrent refreshes, retains session on conflict and discards in-flight results after sign-out. Browser login-page preview has no console errors; missing public-key configuration disables login with an explicit setup message.
+
+- Unified admin hub: exact loopback origin only embeds import.html; the production page offers a link without making loopback requests. Tab switching preserves the importer iframe and keyboard navigation works. Browser preview confirms the local configuration is connected and the reviewer login panel appears on tab switch. Python public-build checks also exclude import.html.

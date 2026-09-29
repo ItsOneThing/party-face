@@ -1,3 +1,4 @@
+import './admin-hub.js';
 // Session is kept in memory only. Reload/sign-out removes it; refresh rotates the token while this page stays open.
 const $=id=>document.getElementById(id), config=window.PARTY_CONFIG || {};
 let session=null, epoch=0, refreshPromise=null, expiryTimer=null;

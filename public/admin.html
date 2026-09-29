@@ -1,1 +1,36 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>partyface · 活动发布工具</title><link rel="stylesheet" href="styles.css"><script type="module" src="admin.js"></script></head><body><header class="site-header"><a class="brand" href="./"><span class="brand-mark">✳</span> partyface</a><span class="event-pill">仅在你的电脑运行</span></header><main class="admin-main"><p class="eyebrow">PREPARE A NEW MEMORY</p><h1>活动发布工具</h1><p class="security-note">FaceNet512 测试版：先运行 004 数据库迁移并部署新版查询函数，使用新的活动编号。不要把未取得明确同意的旧活动照片重新导入。<a href="model-lab.html">先打开纯本地模型测试 →</a></p><p class="admin-note">原图留在 Drive。这里在你的电脑分析活动照片，再同步人脸特征与缩略图。<br>导入期间请保持页面和本地服务打开，电脑不要休眠。</p><div class="security-note" id="admin-status">正在连接本地工具…</div><section class="admin-card"><label for="title">活动名称</label><input id="title" value="迎新会 2026" maxlength="100"><label for="title-it">意大利语活动名称（选填）</label><input id="title-it" value="Festa di benvenuto 2026" maxlength="100"><label for="slug">活动编号（每场活动唯一）</label><input id="slug" value="facenet-test-2026" pattern="[a-z0-9-]+"><label for="folder">Google Drive 文件夹链接（包含所有子文件夹）</label><input id="folder" placeholder="粘贴已获得明确同意的测试照片文件夹链接"><label class="consent"><input type="checkbox" id="face-enabled"><span>使用 FaceNet512 建立人脸索引：仅用于已取得明确同意的测试照片（默认关闭）</span></label><button id="scan" class="primary" disabled>扫描照片并准备活动 ↗</button><p class="admin-note">仅导入公开可访问的 JPG、PNG、WebP；不跟随快捷方式。重复扫描自动跳过已处理且未修改的照片。同步不会自动删除从 Drive 移走的旧照片。</p></section><section id="import-panel" class="admin-card" hidden><h2 id="summary">照片准备好了</h2><p class="admin-note">没有检测到人脸的图片也会记录，避免重复处理。请留意零人脸图片，大合照和侧脸可能漏检。</p><progress class="progress" id="progress" value="0" max="1"></progress><div class="admin-actions"><button class="secondary" id="import">开始导入</button><button class="secondary" id="stop" disabled>处理完当前照片后暂停</button></div><img class="admin-preview" id="import-preview" alt="正在处理的活动照片" hidden><pre id="log" class="admin-log" aria-live="polite"></pre><div class="admin-actions"><button class="secondary" id="publish" disabled>开放活动并生成链接</button><button class="secondary" id="close" disabled>关闭活动查询</button></div><p class="admin-note">有失败的照片也可发布已成功的部分。之后重新扫描可重试失败项。关闭查询不会删除索引，也不会改变 Drive 分享。</p><div class="admin-result" id="share" hidden><p>活动链接（请保留完整的 #key 部分）：</p><a id="share-link" target="_blank" rel="noopener noreferrer"></a><div class="admin-actions"><button class="secondary" id="copy">复制链接</button></div></div></section></main><footer><a class="brand" href="./">✳ partyface</a><span>有任何问题，可以找OneThing</span><span>照片来源：passion lab polimi摄影社</span></footer></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>partyface · 管理后台</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="person-groups.css"><script src="config.js"></script><script type="module" src="online-admin.js"></script></head>
+<body data-online-admin="true"><main class="groups-main">
+<nav><a href="./">← partyface</a><button id="admin-signout" class="secondary" hidden>退出账号</button></nav>
+<p class="eyebrow">PARTYFACE · TEAM REVIEW</p><h1>活动照片，一个后台管理。</h1>
+<p>先导入活动照片，再与管理员一起核对人物分组，准备好后分享给参加者。</p>
+<div class="admin-tabs" role="tablist" aria-label="管理功能"><button id="admin-import-tab" role="tab" aria-selected="false" aria-controls="admin-import-panel" tabindex="-1" class="secondary">1 · 导入照片</button><button id="admin-review-tab" role="tab" aria-selected="true" aria-controls="admin-review-panel" class="primary">2 · 人物分组</button></div>
+<section id="admin-import-panel" role="tabpanel" aria-labelledby="admin-import-tab" hidden>
+<div id="admin-import-help" class="admin-card"><h2>连接本地导入工具</h2><p id="admin-import-status" role="status">正在检查本地导入工具…</p><p>在组织者电脑双击 start.command，保持终端打开，然后打开本地管理后台。导入期间保持页面打开，电脑不要休眠。</p><a class="primary" href="http://127.0.0.1:8765/admin.html" target="_blank" rel="noopener noreferrer">打开本地管理后台 ↗</a><p class="admin-note">.env 和 Google Drive 密钥保留在组织者电脑。在线后台用于登录、核对与保存分组。</p></div>
+<iframe id="admin-import-frame" title="活动照片导入工具" hidden></iframe>
+</section>
+<section id="admin-review-panel" role="tabpanel" aria-labelledby="admin-review-tab">
+<section id="admin-login" class="admin-card"><h2>管理员登录</h2><p>每位管理员使用自己的账号。负责人分配活动权限后，即可在这里协作核对。</p><form id="admin-login-form"><label for="admin-email">邮箱</label><input id="admin-email" type="email" autocomplete="username" required><label for="admin-password">密码</label><input id="admin-password" type="password" autocomplete="current-password" required><div class="group-actions"><button id="admin-submit" type="submit" class="primary">登录</button></div></form></section>
+<p id="admin-auth-status" role="status" aria-live="polite">正在检查管理后台配置…</p>
+<div id="admin-workspace" hidden>
+<section class="admin-card">
+<h2>保存并发布活动分组</h2>
+<p>选择已授权的 FaceNet512 活动，读取共享草稿。保存草稿保留人工纠错，发布后只有已核对小组进入自拍查询。发布分组不会自动开放活动。</p>
+<label for="group-event">你可以管理的活动</label><select id="group-event"><option value="">登录后显示活动</option></select>
+<div class="group-actions"><button id="group-load" class="secondary" disabled>读取已导入活动（替换当前分组）</button><button id="group-save" class="secondary" disabled>保存分组草稿到 Supabase</button><button id="group-publish" class="primary" disabled>发布已核对的分组</button></div>
+<p id="group-cloud-status" role="status">登录后可以读取和编辑活动分组。</p>
+<label class="consent"><input id="group-consent" type="checkbox"><span>我确认照片中的人物已明确同意用于本次人脸识别与分组测试。</span></label>
+<div hidden><input id="group-files" type="file" multiple><button id="group-start"></button><button id="group-stop"></button><button id="group-demo"></button><button id="group-reset"></button></div>
+<p class="admin-note">编辑者可以核对和保存草稿；负责人可以发布。保存遇到版本冲突时，本页修改会保留，请记录修改后重新读取最新草稿。重新读取会替换当前未保存的内容。</p>
+<p id="group-status" role="status" aria-live="polite">勾选授权确认后读取活动。照片导入仍由组织者在本地管理工具完成。</p>
+<progress id="group-progress" value="0" max="1" hidden></progress><pre id="group-log"></pre>
+</section>
+<section id="group-review" hidden>
+<div class="review-bar"><div><h2>检查人物小组</h2><p id="group-summary"></p></div><button id="group-merge" class="primary" disabled>合并选中的小组</button></div>
+<p>未确认的小组是算法建议，不代表可靠身份。先核对原照片和对齐裁剪，再合并同一个人的小组。认错的人脸可移到其他组，或独立成组。</p>
+<div id="group-grid"></div>
+<details><summary>没有检测到人脸或分析失败的照片</summary><div id="group-unmatched"></div></details>
+</section>
+<dialog id="group-viewer"><button id="group-viewer-close" class="secondary">关闭预览</button><h2 id="group-viewer-title"></h2><div id="group-viewer-content"></div></dialog>
+</div></section></main></body></html>
