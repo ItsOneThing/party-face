@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>partyface · 人物分组预览</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="person-groups.css"><script type="module" src="person-groups-ui.js"></script></head>
+<body><main class="groups-main">
+<nav><a href="model-lab.html">← 模型测试</a> · <a href="admin.html">管理工具</a></nav>
+<p class="eyebrow">PARTYFACE · LOCAL REVIEW</p><h1>先把同一个人，放到一起。</h1>
+<p>自动生成保守的人物小组，再由你检查、合并和纠错。每张人脸单独分组，合照可以关联多个人物组。</p>
+<section class="admin-card">
+<label class="consent"><input id="group-consent" type="checkbox"><span>我确认照片中的人物已明确同意用于本次人脸识别与分组测试。</span></label>
+<label for="group-files">选择测试照片（可多选，最多 500 张）</label><input id="group-files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+<div class="group-actions"><button id="group-start" class="primary" disabled>分析并生成人物小组</button><button id="group-stop" class="secondary" disabled>处理完当前照片后暂停</button><button id="group-reset" class="secondary">清空本次测试</button><button id="group-demo" class="secondary">查看纠错界面示例</button></div>
+<p class="admin-note">仅在浏览器内分析，不调用 Supabase 或 Drive。结果和人工纠错只保留在当前页面内存中，刷新或关闭后清除。示例只使用示意图，不进行真人识别。</p>
+<p id="group-status" role="status" aria-live="polite">先选择少量已获同意的照片。首次模型加载约 94 MB，初始分组距离阈值 0.65 尚未校准。</p>
+<progress id="group-progress" value="0" max="1" hidden></progress><pre id="group-log"></pre>
+</section>
+<section id="group-review" hidden>
+<div class="review-bar"><div><h2>检查人物小组</h2><p id="group-summary"></p></div><button id="group-merge" class="primary" disabled>合并选中的小组</button></div>
+<p>未确认的小组是算法建议，不代表可靠身份。先核对原照片和对齐裁剪，再合并同一个人的小组。认错的人脸可移到其他组，或独立成组。</p>
+<div id="group-grid"></div>
+<details><summary>没有检测到人脸或分析失败的照片</summary><div id="group-unmatched"></div></details>
+</section>
+<dialog id="group-viewer"><button id="group-viewer-close" class="secondary">关闭预览</button><h2 id="group-viewer-title"></h2><div id="group-viewer-content"></div></dialog>
+</main></body></html>

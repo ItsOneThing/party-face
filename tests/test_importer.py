@@ -111,10 +111,14 @@ class ImporterTests(unittest.TestCase):
             for name in ['art', 'models', 'vendor']:
                 (public / name).mkdir()
             (public / 'admin.html').write_text('private UI')
+            (public / 'person-groups.html').write_text('private review UI')
+            (public / 'person-groups-ui.js').write_text('private review code')
             (root / '.env').write_text('SECRET=private')
             with patch.object(builder, 'ROOT', root):
                 builder.build()
             self.assertFalse((root / 'dist/admin.html').exists())
+            self.assertFalse((root / 'dist/person-groups.html').exists())
+            self.assertFalse((root / 'dist/person-groups-ui.js').exists())
             self.assertFalse((root / 'dist/.env').exists())
             self.assertTrue((root / 'dist/index.html').exists())
 

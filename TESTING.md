@@ -51,3 +51,11 @@ node tests/sql_test.mjs /path/to/pglite/package /path/to/pglite-pgvector/package
 - The local model lab is excluded from public builds and does not upload selected images or vectors.
 
 Run `node tests/facenet_test.mjs` in addition to the tests above.
+
+
+## Local person grouping preview (2026-09-29)
+
+- `node tests/person_groups_test.mjs`: complete-link admission rejects weak chains; co-photo constraints prevent merging different co-occurring faces; ambiguous membership stays separate; moving/splitting/merging, unique photo lists, duplicate IDs and descriptor validation checked.
+- Actual browser example (schematic images, no real-face recognition): three groups merged into two; the intentionally misplaced A sample moved from B into A; group A then links three photos, B one. Crop/original preview and correction UI exercised.
+- Public build excludes local review page and scripts. No cloud write, persistence or production query changes.
+- Actual consenting event-photo clustering quality, ordering sensitivity and scale/performance remain unverified.

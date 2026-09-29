@@ -32,7 +32,7 @@ function fivePoints(landmarks){
   const positions=landmarks.positions, mouth=[positions[48],positions[54]].sort((a,b)=>a.x-b.x);
   return [...eyes,[positions[30].x,positions[30].y],...mouth.map(p=>[p.x,p.y])];
 }
-export async function detectFaces(canvas, importer=false){
+export async function detectFaces(canvas, importer=false, includePreview=false){
   await loadModels();
   const detections=await faceapi.detectAllFaces(canvas,new faceapi.SsdMobilenetv1Options({minConfidence:importer?.7:.8,maxResults:importer?300:10})).withFaceLandmarks();
   const faces=[];
@@ -50,7 +50,14 @@ export async function detectFaces(canvas, importer=false){
       try{
         output=await session.run({[session.inputNames[0]]:tensor});
         const descriptor=normalizeEmbedding(output[session.outputNames[0]].data);
-        faces.push({descriptor,score:detection.detection.score,box:{x:Math.max(0,box.x/canvas.width),y:Math.max(0,box.y/canvas.height),width:Math.min(1,box.width/canvas.width),height:Math.min(1,box.height/canvas.height)}});
+        const face={descriptor,score:detection.detection.score,box:{x:Math.max(0,box.x/canvas.width),y:Math.max(0,box.y/canvas.height),width:Math.min(1,box.width/canvas.width),height:Math.min(1,box.height/canvas.height)}};
+        if(includePreview){
+          face.alignedPreview=crop.toDataURL('image/jpeg',.8);
+          const preview=document.createElement('canvas');preview.width=preview.height=160;
+          preview.getContext('2d').drawImage(canvas,Math.max(0,box.x),Math.max(0,box.y),Math.min(box.width,canvas.width-Math.max(0,box.x)),Math.min(box.height,canvas.height-Math.max(0,box.y)),0,0,160,160);
+          face.facePreview=preview.toDataURL('image/jpeg',.8);preview.width=preview.height=1;
+        }
+        faces.push(face);
       }finally{tensor.dispose();if(output)for(const value of Object.values(output))value.dispose();}
     }finally{crop.width=crop.height=1;}
   }

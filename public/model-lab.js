@@ -10,7 +10,21 @@ $('lab-smoke').addEventListener('click',async()=>{
   }catch(error){$('lab-status').textContent='运行验证失败：'+error.message;}
   finally{busy=false;ready();$('lab-smoke').disabled=false;}
 });
-function ready(){$('lab-run').disabled=busy||!$('lab-consent').checked||!$('lab-selfie').files.length||!$('lab-photos').files.length;}
+function ready(){
+  $('lab-run').disabled=busy||!$('lab-consent').checked||!$('lab-selfie').files.length||!$('lab-photos').files.length;
+  $('lab-clear-selfie').disabled=busy||!$('lab-selfie').files.length;
+  $('lab-clear-photos').disabled=busy||!$('lab-photos').files.length;
+}
+for(const [button,input,label] of [['lab-clear-selfie','lab-selfie','参考自拍'],['lab-clear-photos','lab-photos','待对比照片']]){
+  $(button).addEventListener('click',()=>{
+    if(busy)return;
+    $(input).value='';
+    $('lab-results').textContent='';
+    $('lab-status').textContent=label+'已移除，可以重新选择照片。';
+    ready();
+  });
+}
+ready();
 for(const id of ['lab-consent','lab-selfie','lab-photos'])$(id).addEventListener('change',ready);
 async function faces(file,importer){
   if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>20*1024*1024)throw new Error('请选择不超过 20 MB 的 JPG、PNG 或 WebP');
